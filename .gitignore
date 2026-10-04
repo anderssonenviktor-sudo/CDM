@@ -1,0 +1,10 @@
+# Ignore everything
+*
+
+# Allow these files/folders
+!.gitignore
+!CDM/
+!CDM/**
+!CDM_Options/
+!CDM_Options/**
+

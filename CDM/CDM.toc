@@ -1,0 +1,19 @@
+## Interface: 120007, 120100
+## Title: CDM
+## Notes: Editable cooldown and native buff icon groups.
+## Author: CDM contributors
+## Version: 0.2.0
+## SavedVariables: CDM_DB
+## OptionalDeps: Blizzard_CooldownViewer
+
+Libs\embeds.xml
+Init.lua
+Schema.lua
+Settings.lua
+Model.lua
+Layout.lua
+Style.lua
+BlizzardAdapter.lua
+Updates.lua
+PublicAPI.lua
+Bootstrap.lua
