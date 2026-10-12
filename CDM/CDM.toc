@@ -1,19 +1,15 @@
+## Title: |cFF3bb273CDM|r
+## Notes: Cooldown Manager
+## Author: Ayije (citrongrod now)
+## Version: 1.18
 ## Interface: 120007, 120100
-## Title: CDM
-## Notes: Editable cooldown and native buff icon groups.
-## Author: CDM contributors
-## Version: 0.2.0
-## SavedVariables: CDM_DB
-## OptionalDeps: Blizzard_CooldownViewer
+## DefaultState: enabled
+## SavedVariables: CDM_RebornDB
 
 Libs\embeds.xml
 Init.lua
-Schema.lua
-Settings.lua
-Model.lua
-Layout.lua
-Style.lua
-BlizzardAdapter.lua
-Updates.lua
-PublicAPI.lua
-Bootstrap.lua
+Locales\embeds.xml
+Core\embeds.xml
+Config\embeds.xml
+Modules\embeds.xml
+Core\Main.lua
