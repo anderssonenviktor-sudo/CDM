@@ -543,6 +543,44 @@ local function StopDrag()
 end
 
 local nudgePanel
+local anchorBanner
+
+local function CreateAnchorBanner()
+    if anchorBanner then return anchorBanner end
+
+    local banner = CreateFrame("Frame", "CDM_AnchorModeBanner", UIParent, "BackdropTemplate")
+    banner:SetSize(230, 30)
+    banner:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
+    banner:SetFrameStrata("TOOLTIP")
+    banner:SetFrameLevel(10001)
+    banner:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    banner:SetBackdropColor(0.035, 0.035, 0.04, 0.96)
+    banner:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 1)
+
+    local label = banner:CreateFontString(nil, "OVERLAY", "CDM_Font12")
+    label:SetPoint("LEFT", 14, 0)
+    label:SetText(L["Anchor Mode"])
+    label:SetTextColor(GOLD[1], GOLD[2], GOLD[3], 1)
+
+    local exitButton = CreateFrame("Button", nil, banner)
+    exitButton:SetSize(100, 28)
+    exitButton:SetPoint("RIGHT", -5, 0)
+    local exitText = exitButton:CreateFontString(nil, "OVERLAY", "CDM_Font12")
+    exitText:SetPoint("CENTER")
+    exitText:SetText(L["Exit Anchor"])
+    exitText:SetTextColor(1, 0.3, 0.2, 1)
+    exitButton:SetScript("OnEnter", function() exitText:SetTextColor(1, 0.65, 0.5, 1) end)
+    exitButton:SetScript("OnLeave", function() exitText:SetTextColor(1, 0.3, 0.2, 1) end)
+    exitButton:SetScript("OnClick", function() AnchorMode:Exit(true) end)
+
+    banner:Hide()
+    anchorBanner = banner
+    return banner
+end
 
 local function RefreshOverlaySelection()
     for _, overlay in ipairs(AnchorMode.overlays) do
@@ -584,6 +622,11 @@ local KEYBOARD_NUDGES = {
 }
 
 keyboardHandler:SetScript("OnKeyDown", function(self, key)
+    if key == "ESCAPE" then
+        AnchorMode:Exit(true)
+        self:SetPropagateKeyboardInput(false)
+        return
+    end
     if GetCurrentKeyBoardFocus() then
         self:SetPropagateKeyboardInput(true)
         return
@@ -741,8 +784,8 @@ local function CreateOverlay(entry)
     overlay:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 2,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
     overlay:SetBackdropColor(OVERLAY_COLOR[1], OVERLAY_COLOR[2], OVERLAY_COLOR[3], OVERLAY_COLOR[4])
     overlay:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], GOLD[4])
@@ -807,6 +850,7 @@ function AnchorMode:Enter(button)
     end
     self.selectedEntry = nil
     local panel = CreateNudgePanel()
+    CreateAnchorBanner():Show()
     UpdateNudgePanel()
     panel:Show()
     keyboardHandler:SetPropagateKeyboardInput(true)
@@ -818,7 +862,7 @@ function AnchorMode:Enter(button)
     if button then button:LockHighlight() end
 end
 
-function AnchorMode:Exit()
+function AnchorMode:Exit(reopenConfig)
     if not self.active then return end
     self.active = false
     if dragging then
@@ -832,6 +876,7 @@ function AnchorMode:Exit()
     keyboardHandler:Hide()
     keyboardHandler:SetPropagateKeyboardInput(true)
     if nudgePanel then nudgePanel:Hide() end
+    if anchorBanner then anchorBanner:Hide() end
     self.selectedEntry = nil
     ClearOverlays()
     if CDM.SetAnchorModeActive then
@@ -839,11 +884,14 @@ function AnchorMode:Exit()
     end
     if self.button then self.button:UnlockHighlight() end
     self.button = nil
+    if reopenConfig and not InCombatLockdown() and CDM.API and CDM.API.ShowConfig then
+        CDM.API:ShowConfig()
+    end
 end
 
 function ns.ToggleAnchorMode(button)
     if AnchorMode.active then
-        AnchorMode:Exit()
+        AnchorMode:Exit(true)
     else
         AnchorMode:Enter(button)
     end
@@ -853,15 +901,15 @@ function ns.IsAnchorModeActive()
     return AnchorMode.active
 end
 
-function ns.CloseAnchorMode()
-    AnchorMode:Exit()
+function ns.CloseAnchorMode(reopenConfig)
+    AnchorMode:Exit(reopenConfig)
 end
 
 CDM:RegisterCombatStateHandler(function(isInCombat)
     if isInCombat then
         if AnchorMode.active then
             PrintMessage(L["Anchors closed because combat started."])
-            AnchorMode:Exit()
+            AnchorMode:Exit(false)
         end
     else
         CDM:UpdateEditModeSelectionOverlays()

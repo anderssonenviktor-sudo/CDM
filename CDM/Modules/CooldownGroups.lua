@@ -130,6 +130,9 @@ local function ResolveCooldownCustomIconOverride(frame, frameData)
 end
 
 local function ResolveDefaultCooldownIcon(frame, frameData)
+    if frame.slotID and frame.itemID and C_Item and C_Item.GetItemIconByID then
+        return C_Item.GetItemIconByID(frame.itemID)
+    end
     local identity = frameData.cdGroupSpellID
     if not identity and frame.cooldownInfo then
         identity = CDM_C.ResolveViewerEntryIdentity(frame.cooldownInfo)

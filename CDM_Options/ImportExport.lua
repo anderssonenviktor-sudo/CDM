@@ -153,7 +153,8 @@ end
 local TRACKED_CATEGORIES = {}
 if Enum and Enum.CooldownViewerCategory then
     local category = Enum.CooldownViewerCategory
-    for _, name in ipairs({ "Essential", "Utility", "TrackedBuff", "TrackedBar" }) do
+    for _, name in ipairs({ "Essential", "Utility", "TrackedBuff", "TrackedBar",
+        "SpecAgnosticEssential", "SpecAgnosticTracked", "EquipSlotEssential", "EquipSlotTracked" }) do
         if category[name] then TRACKED_CATEGORIES[category[name]] = true end
     end
 end
@@ -206,7 +207,10 @@ local function CaptureBlizzardTracking()
         local category = entry.info.category
         if IsTrackedCategory(category) then
             entries[#entries + 1] = {
-                cooldownID = entry.id, spellID = SafeID(entry.info.spellID), category = category,
+                cooldownID = entry.id,
+                spellID = category ~= Enum.CooldownViewerCategory.EquipSlotEssential
+                    and SafeID(entry.info.spellID) or nil,
+                category = category,
             }
         end
     end

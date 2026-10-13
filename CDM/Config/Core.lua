@@ -2417,10 +2417,12 @@ local function RefreshGroupData(self, sets, dbKey, categories, shouldInvalidateC
                     local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
                     if info then
                         local identity = CDM.CONST.ResolveViewerEntryIdentity
-                            and CDM.CONST.ResolveViewerEntryIdentity(info)
+                            and CDM.CONST.ResolveViewerEntryIdentity(info, cat)
                         local nativeCategory = identity and CDM.CONST.GetNativeItemCategoryFromSentinel
                             and CDM.CONST.GetNativeItemCategoryFromSentinel(identity)
-                        local match = nativeCategory and spellToGroup[identity] or nil
+                        local nativeTrinket = identity and CDM.CONST.GetNativeTrinketSlotFromSentinel
+                            and CDM.CONST.GetNativeTrinketSlotFromSentinel(identity)
+                        local match = (nativeCategory or nativeTrinket) and spellToGroup[identity] or nil
                         if not match and info.overrideTooltipSpellID then
                             match = spellToGroup[info.overrideTooltipSpellID]
                         end

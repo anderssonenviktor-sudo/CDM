@@ -504,6 +504,7 @@ function Shared.CreateDragDropController(config)
         end
         local tex
         local trinketSlot = CDM_C.GetTrinketSlotFromSentinel and CDM_C.GetTrinketSlotFromSentinel(spellID)
+            or CDM_C.GetNativeTrinketSlotFromSentinel and CDM_C.GetNativeTrinketSlotFromSentinel(spellID)
         if trinketSlot then
             local itemID = GetInventoryItemID("player", trinketSlot)
             tex = itemID and C_Item.GetItemIconByID(itemID)

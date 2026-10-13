@@ -654,13 +654,51 @@ local function ConvertBarGeometry(ctx, record)
     if type(record.cast.data) == "table" then
         ConvertCastBar(ctx, record.cast.data, record.cast.path)
         local model = ResolvePosition(ctx, models, "SCM_CastBar", {})
+        local anchors = Get(record.cast.data, "anchors")
+        local sourceTarget = Get(anchors, 2)
+        local targetsPrimary = type(sourceTarget) == "string" and sourceTarget:find("SCM_PrimaryResourceBar", 1, true)
+        local targetsSecondary = type(sourceTarget) == "string" and sourceTarget:find("SCM_SecondaryResourceBar", 1, true)
+        local targetsResources = targetsPrimary or targetsSecondary
         if model and not model.invalid then
             ctx.data.castBarWidth, ctx.data.castBarHeight = model.width, model.height
-            if model.anchorTarget == "screen" or model.anchorTarget == "playerFrame" or model.anchorTarget == "essential" or model.anchorTarget == "utility" then
+            if targetsResources and POINTS[Get(anchors, 1)] and POINTS[Get(anchors, 3)]
+                and Number(Get(anchors, 4), -10000, 10000) and Number(Get(anchors, 5), -10000, 10000) then
+                ctx.data.castBarAnchor = "resources"
+                ctx.data.castBarAnchorPoint, ctx.data.castBarTargetPoint = anchors[1], anchors[3]
+                ctx.data.castBarOffsetX, ctx.data.castBarOffsetY = anchors[4], anchors[5]
+                ctx:Use(Path(record.cast.path, "anchors"))
+            elseif model.anchorTarget == "screen" or model.anchorTarget == "playerFrame"
+                or model.anchorTarget == "essential" or model.anchorTarget == "utility" then
                 ctx.data.castBarAnchor, ctx.data.castBarAnchorPoint = model.anchorTarget, "CENTER"
                 ctx.data.castBarTargetPoint = model.anchorRelativeTo
                 ctx.data.castBarOffsetX, ctx.data.castBarOffsetY = model.x, model.y
                 ctx:Use(Path(record.cast.path, "anchors"))
+            end
+        end
+        local resourceSettings = ctx.data.resourceBarSettings
+        if model and resourceSettings then
+            local candidates = targetsPrimary and not targetsSecondary
+                and { { record.primary, "SCM_PrimaryResourceBar", "primaryBar" }, { record.secondary, "SCM_SecondaryResourceBar", "secondaryBar" } }
+                or { { record.secondary, "SCM_SecondaryResourceBar", "secondaryBar" }, { record.primary, "SCM_PrimaryResourceBar", "primaryBar" } }
+            for _, candidate in ipairs(candidates) do
+                local key, modelName, section = unpack(candidate)
+                local resourceModel = models[modelName]
+                local class = key == "Mana" and "General" or record.class
+                local imported = key and resourceSettings[class] and resourceSettings[class][key]
+                if key and resourceModel and resourceModel.shown and imported then
+                    local sourceConfig = Get(record.resources.data, section)
+                    local sameFixedWidth = Get(sourceConfig, "matchAnchorWidth") == false
+                        and Number(Get(record.cast.data, "width"), 1, 2000)
+                        and Get(record.cast.data, "width") == Get(sourceConfig, "width")
+                    local sameResolvedWidth = targetsResources and Number(model.width) and Number(resourceModel.width)
+                        and math.abs(model.width - resourceModel.width) < 0.5
+                    if (targetsResources and Get(record.cast.data, "matchParentWidth") == true)
+                        or sameFixedWidth or sameResolvedWidth then
+                        ctx.data.castBarWidth = imported.width
+                        if imported.width == 0 then ctx.data.castBarAutoWidthSource = "essential" end
+                        break
+                    end
+                end
             end
         end
     end
@@ -714,6 +752,24 @@ local function FontSize(value, width, height)
     return value > 1 and value or math.max(1, math.floor(math.min(width, height) * value + 0.5))
 end
 
+local function ResolveSkironViewerID(config, category, cooldownID)
+    local categories = Enum.CooldownViewerCategory
+    local spellID = ID(Get(config, "spellID"))
+    if category ~= categories.EquipSlotEssential and category ~= categories.EquipSlotTracked then
+        return spellID
+    end
+    if not cooldownID or not C_CooldownViewer or not C_CooldownViewer.GetCooldownViewerCooldownInfo then
+        return spellID
+    end
+    local ok, info = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cooldownID)
+    if not ok or type(info) ~= "table" then return spellID end
+    if category == categories.EquipSlotEssential and (info.equipSlot == 13 or info.equipSlot == 14) then
+        return CDM.CONST.GetNativeTrinketSentinelForSlot(info.equipSlot)
+    end
+    local linked = Get(info, "linkedSpellIDs")
+    return spellID or ID(Get(info, "spellID")) or ID(Get(linked, 1))
+end
+
 local function ConvertSpec(ctx, specID, source, base, general)
     local version = Get(source, "profileVersion")
     if version ~= nil and (not Number(version, 0, 2) or version ~= math.floor(version)) then return false, "invalid_profile_version" end
@@ -737,25 +793,35 @@ local function ConvertSpec(ctx, specID, source, base, general)
             if total > 4096 then return false, "invalid_profile_data" end
             local spellPath = Path(Path(base, "spellConfig"), configKey)
             local spellID = ID(Get(config, "spellID"))
+            local cooldownID = ID(Get(config, "cooldownID"))
             local sources, groupConfigs = Get(config, "source"), Get(config, "anchorGroup")
-            if spellID and type(sources) == "table" and type(groupConfigs) == "table" then
+            if type(sources) == "table" and type(groupConfigs) == "table" then
                 local choices = {}
                 for category, groupIndex in pairs(sources) do
                     category, groupIndex = tonumber(category), ID(groupIndex)
-                    local sourceKind = category == categories.TrackedBuff and "buff"
-                        or category == categories.Essential and "essential"
+                    local sourceKind = (category == categories.TrackedBuff or category == categories.EquipSlotTracked
+                        or category == categories.SpecAgnosticTracked) and "buff"
+                        or (category == categories.Essential or category == categories.EquipSlotEssential
+                            or category == categories.SpecAgnosticEssential) and "essential"
                         or category == categories.Utility and "utility"
                     local group = groupIndex and Get(groupConfigs, groupIndex)
                     local model = groupIndex and models[groupIndex]
                     if sourceKind and model and type(group) == "table" then
                         local target = BuiltInTarget(model)
+                        local builtIn = (sourceKind == "buff" and target == "buff"
+                            or sourceKind ~= "buff" and (target == "essential" or target == "utility")) and target or nil
+                        local nativeCategory = category == categories.EquipSlotEssential or category == categories.EquipSlotTracked
+                            or category == categories.SpecAgnosticEssential or category == categories.SpecAgnosticTracked
+                        local resolvedID = ResolveSkironViewerID(config, category, cooldownID)
                         choices[#choices + 1] = {
-                            kind = target or (sourceKind == "buff" and "buffGroups" or "cooldownGroups"),
+                            id = resolvedID,
+                            kind = builtIn or (sourceKind == "buff" and "buffGroups" or "cooldownGroups"),
+                            builtIn = builtIn,
                             family = sourceKind == "buff" and "buff" or "cooldown",
                             index = groupIndex, category = category, config = group,
-                            targetCategory = target == "essential" and categories.Essential
-                                or target == "utility" and categories.Utility
-                                or target == "buff" and categories.TrackedBuff or category,
+                            targetCategory = nativeCategory and category or builtIn == "essential" and categories.Essential
+                                or builtIn == "utility" and categories.Utility
+                                or builtIn == "buff" and categories.TrackedBuff or category,
                         }
                     end
                 end
@@ -767,31 +833,35 @@ local function ConvertSpec(ctx, specID, source, base, general)
                 -- named anchors retain their own CDM groups.
                 local usedKinds = {}
                 for _, choice in ipairs(choices) do
-                    if not usedKinds[choice.family] then
+                    if not usedKinds[choice.family] and choice.id then
                         usedKinds[choice.family] = choice.index
                         local groupPath = Path(Path(spellPath, "anchorGroup"), choice.index)
                         models[choice.index].entries[#models[choice.index].entries + 1] = {
-                            id = spellID, kind = choice.kind,
+                            id = choice.id, kind = choice.kind,
                             order = Number(Get(choice.config, "order"), -100000, 100000) or 999,
                             config = choice.config, path = groupPath,
                         }
-                        local cooldownID = ID(Get(config, "cooldownID"))
-                        local trackingID = cooldownID or -spellID
+                        local trackingID = cooldownID or -choice.id
                         if not trackedIDs[trackingID] then
+                            local trackingSpellID = choice.category ~= categories.EquipSlotEssential and spellID or nil
                             tracking.entries[#tracking.entries + 1] = {
-                                cooldownID = cooldownID, spellID = spellID, category = choice.targetCategory,
+                                cooldownID = cooldownID,
+                                spellID = trackingSpellID,
+                                category = choice.targetCategory,
                             }
                             trackedIDs[trackingID] = true
                         end
-                        if BuiltInTarget(models[choice.index]) then
+                        if choice.builtIn then
                             ctx:Use(Path(models[choice.index].path, "anchorName"))
                         end
-                        ctx:Use(Path(spellPath, "spellID"))
-                        ctx:Use(Path(spellPath, "cooldownID"))
+                        if spellID then ctx:Use(Path(spellPath, "spellID")) end
+                        if cooldownID then ctx:Use(Path(spellPath, "cooldownID")) end
                         ctx:Use(Path(Path(spellPath, "source"), choice.category))
                         if Number(Get(choice.config, "order"), -100000, 100000) then ctx:Use(Path(groupPath, "order")) end
                     elseif usedKinds[choice.family] == choice.index then
                         ctx:Use(Path(Path(spellPath, "source"), choice.category))
+                    elseif not choice.id then
+                        ctx:Warn(L["Some Skiron equipment-slot icons could not be matched to Blizzard's cooldown entries."])
                     else
                         ctx:Warn(L["Duplicate Skiron spell assignments use the first compatible group in each viewer."])
                     end
@@ -799,8 +869,8 @@ local function ConvertSpec(ctx, specID, source, base, general)
             end
         end
     end
-    local slots = Get(Get(source, "customConfig"), "slotConfig")
-    if type(slots) == "table" and CDM.CONST.GetTrinketSentinelForSlot then
+    local function ImportSlots(slots, slotPath)
+        if type(slots) ~= "table" or not CDM.CONST.GetTrinketSentinelForSlot then return end
         for key, config in pairs(slots) do
             local slot, index = ID(Get(config, "slotID")), ID(Get(config, "anchorGroup"))
             if (slot == 13 or slot == 14) and models[index]
@@ -813,12 +883,15 @@ local function ConvertSpec(ctx, specID, source, base, general)
                 ctx.data.cooldownTrinkets = ctx.data.cooldownTrinkets or {}
                 ctx.data.cooldownTrinkets[specID] = ctx.data.cooldownTrinkets[specID] or {}
                 ctx.data.cooldownTrinkets[specID][slot] = true
-                local path = Path(Path(Path(base, "customConfig"), "slotConfig"), key)
+                local path = Path(slotPath, key)
                 for _, field in ipairs({ "slotID", "anchorGroup", "order", "id", "iconType", "spellID", "useLoadClass", "useLoadRole", "useLoadRace",
                     "loadClasses", "loadRoles", "loadRaces" }) do ctx:Use(Path(path, field)) end
             end
         end
     end
+    ImportSlots(Get(Get(source, "customConfig"), "slotConfig"), Path(Path(base, "customConfig"), "slotConfig"))
+    ImportSlots(Get(Get(ctx.globalAnchors, "globalCustomConfig"), "slotConfig"),
+        "globalAnchors.globalCustomConfig.slotConfig")
     for _, model in pairs(models) do
         table.sort(model.entries, function(a, b)
             if a.order ~= b.order then return a.order < b.order end

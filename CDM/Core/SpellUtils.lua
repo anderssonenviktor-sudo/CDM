@@ -43,6 +43,9 @@ function CDM:GetSpellIDCandidates(frame)
     table_wipe(spellCandidateSeen)
     if not frame then return spellCandidateList end
 
+    if frame.slotID and frame.itemID and CDM.CONST.GetTrinketSentinelForSlot then
+        AddCandidate(spellCandidateList, spellCandidateSeen, CDM.CONST.GetTrinketSentinelForSlot(frame.slotID))
+    end
     AddCandidate(spellCandidateList, spellCandidateSeen, CallFrameMethod(frame, "GetSpellID"))
 
     local info = GetFrameCooldownInfo(frame)

@@ -17,6 +17,7 @@ local versionText = nil
 local footerRefreshRegistered = false
 local lastFooterFont = nil
 local combatCloseRegistered = false
+local hidingForAnchorMode = false
 local SCROLL_FRAME_NAMES = {
     resources = "CDM_ResourcesScrollFrame",
     bars = "CDM_BarsScrollFrame",
@@ -177,9 +178,20 @@ local function CreateConfigFrame()
     ConfigFrame:SetSize(920, 720)
     ConfigFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     ConfigFrame:SetFrameStrata("HIGH")
-    ConfigFrame:SetClampedToScreen(true)
     ConfigFrame:Hide()
-    tinsert(UISpecialFrames, "CDMConfigFrame")
+    if not tContains(UISpecialFrames, "CDMConfigFrame") then
+        tinsert(UISpecialFrames, "CDMConfigFrame")
+    end
+    ConfigFrame:EnableKeyboard(true)
+    ConfigFrame:SetPropagateKeyboardInput(true)
+    ConfigFrame:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+            self:SetPropagateKeyboardInput(false)
+            self:Hide()
+        else
+            self:SetPropagateKeyboardInput(true)
+        end
+    end)
     ConfigFrame:HookScript("OnHide", function()
         if UI and UI.CloseAllDropdownMenus then
             UI.CloseAllDropdownMenus()
@@ -190,6 +202,7 @@ local function CreateConfigFrame()
         end
     end)
     ConfigFrame:HookScript("OnShow", function()
+        ConfigFrame:SetPropagateKeyboardInput(true)
         if CDM.SetConfigWindowActive then
             CDM:SetConfigWindowActive(true)
         end
@@ -200,6 +213,10 @@ local function CreateConfigFrame()
     titleContainer:SetPoint("TOPRIGHT", ConfigFrame, "TOPRIGHT", 0, 0)
     titleContainer:SetHeight(52)
     titleContainer:SetFrameLevel(ConfigFrame:GetFrameLevel() + 10)
+    titleContainer:EnableMouse(true)
+    titleContainer:RegisterForDrag("LeftButton")
+    titleContainer:SetScript("OnDragStart", function() ConfigFrame:StartMoving() end)
+    titleContainer:SetScript("OnDragStop", function() ConfigFrame:StopMovingOrSizing() end)
 
     local titleLogo = titleContainer:CreateTexture(nil, "OVERLAY")
     titleLogo:SetSize(112, 112)
@@ -267,33 +284,17 @@ local function CreateConfigFrame()
     anchorBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     anchorBtn:SetScript("OnClick", function()
         if not (ns.ToggleAnchorMode and ns.IsAnchorModeActive) then return end
-        local anchorsActive = ns.IsAnchorModeActive()
-        if anchorsActive then
-            ns.ToggleAnchorMode(anchorBtn)
-            if CooldownViewerSettings and CooldownViewerSettings:IsVisible() then
-                securecall("HideUIPanel", CooldownViewerSettings)
-            end
-            return
-        end
-
-        if CooldownViewerSettings and not CooldownViewerSettings:IsVisible() then
-            securecall("ShowUIPanel", CooldownViewerSettings)
-        end
-        anchorBtn:Disable()
-        C_Timer.After(0, function()
-            CDM:Refresh("LAYOUT")
-            C_Timer.After(0, function()
-                anchorBtn:Enable()
-                if ConfigFrame:IsShown() and not ns.IsAnchorModeActive() then
-                    ns.ToggleAnchorMode(anchorBtn)
-                end
-            end)
-        end)
+        if InCombatLockdown() then return end
+        hidingForAnchorMode = true
+        ConfigFrame:Hide()
+        hidingForAnchorMode = false
+        ns.ToggleAnchorMode(anchorBtn)
+        if not ns.IsAnchorModeActive() then ConfigFrame:Show() end
     end)
 
     ConfigFrame:HookScript("OnHide", function()
-        if ns.CloseAnchorMode then
-            ns.CloseAnchorMode()
+        if not hidingForAnchorMode and ns.CloseAnchorMode then
+            ns.CloseAnchorMode(false)
         end
     end)
 

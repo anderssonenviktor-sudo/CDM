@@ -45,6 +45,16 @@ local function GetTrinketGroupIndex(frame)
 end
 
 local function ResetTrinketTrackerFrame(frame)
+    local fd = CDM.GetFrameData(frame)
+    if fd.cdmTrinketOverrideGlowActive and CDM.Glow then
+        CDM.Glow:RequestBuffGlow(frame, false)
+    end
+    if fd.cdmTrinketAuraBorderActive and CDM.BORDER then
+        CDM.BORDER:RestoreToCurrentBorderColor(frame)
+    end
+    fd.cdmTrinketOverrideGlowActive = nil
+    fd.cdmTrinketOverrideGlowColor = nil
+    fd.cdmTrinketAuraBorderActive = nil
     frame.slotID = nil
     frame.itemID = nil
     frame.spellID = nil
@@ -53,7 +63,6 @@ local function ResetTrinketTrackerFrame(frame)
         frame.Icon:SetTexture(nil)
         frame.Icon:SetDesaturation(0)
     end
-    local fd = CDM.GetFrameData(frame)
     fd.cdmCooldownStyled = nil
 end
 
@@ -152,14 +161,18 @@ local function RegisterTrinketSpellWatches()
     end
 end
 
-local function UpdateIcon(frame)
+local function UpdateIcon(frame, forceStyle)
     if not frame or not frame:IsShown() then return end
 
     local isOnCooldown = false
+    local override = CDM.ResolveCooldownSpellOverride and CDM:ResolveCooldownSpellOverride(frame)
+    local auraActive = false
 
     if frame.slotID then
         local start, duration, enable = GetInventoryItemCooldown("player", frame.slotID)
-        if start and duration and duration > CDM_C.ITEM_COOLDOWN_GCD_MIN and enable == 1 then
+        local suppressGCD = not override or override.suppressGCD ~= false
+        local minimumDuration = suppressGCD and CDM_C.ITEM_COOLDOWN_GCD_MIN or 0
+        if start and duration and duration > minimumDuration and enable == 1 then
             local fd = CDM.GetFrameData(frame)
             if not fd.cdmDurationObj then
                 fd.cdmDurationObj = C_DurationUtil.CreateDuration()
@@ -174,18 +187,60 @@ local function UpdateIcon(frame)
         frame.Cooldown:Clear()
     end
 
+    local auraSpellID = override and override.replaceBuffSpellID or frame.spellID
+    if override and override.showAuraOverlay and CDM.IsSafeNumber(auraSpellID)
+        and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        local aura = C_UnitAuras.GetPlayerAuraBySpellID(auraSpellID)
+        local duration = aura and aura.duration
+        local expiration = aura and aura.expirationTime
+        if CDM.IsSafeNumber(duration) and CDM.IsSafeNumber(expiration)
+            and duration > 0 and expiration > GetTime() then
+            frame.Cooldown:SetCooldown(expiration - duration, duration)
+            frame.Cooldown:SetReverse(true)
+            auraActive = true
+        end
+    end
+    if not auraActive then frame.Cooldown:SetReverse(false) end
+
     if frame.Icon then
-        frame.Icon:SetDesaturation(isOnCooldown and 1 or 0)
+        local desaturateInactive = override and override.showAuraOverlay
+            and override.auraDesaturateInactive and not auraActive
+        frame.Icon:SetDesaturation((desaturateInactive or isOnCooldown and not auraActive) and 1 or 0)
     end
 
-    if isOnCooldown then
-        local fd = CDM.GetFrameData(frame)
-        if not fd.cdmCooldownStyled then
-            if CDM.ApplyStyle and CDM_C.VIEWERS and CDM_C.VIEWERS.ESSENTIAL then
-                CDM:ApplyStyle(frame, CDM_C.VIEWERS.ESSENTIAL)
-            end
-            fd.cdmCooldownStyled = true
+    local fd = CDM.GetFrameData(frame)
+    if (forceStyle or not fd.cdmCooldownStyled) and CDM.ApplyStyle then
+        CDM:ApplyStyle(frame, CDM_C.VIEWERS.ESSENTIAL, forceStyle)
+        fd.cdmCooldownStyled = true
+    end
+    if CDM.ApplyCooldownCustomIcon then
+        CDM:ApplyCooldownCustomIcon(frame)
+    end
+    if auraActive and override.auraBorderEnabled and CDM.BORDER then
+        CDM.BORDER:ApplyBorderColorOverride(frame, override.auraBorderColor or CDM_C.WHITE)
+        fd.cdmTrinketAuraBorderActive = true
+    elseif fd.cdmTrinketAuraBorderActive and CDM.BORDER then
+        CDM.BORDER:RestoreToCurrentBorderColor(frame)
+        fd.cdmTrinketAuraBorderActive = nil
+    end
+    local auraGlow = override and override.auraGlowEnabled and auraActive
+    local readyGlow = override and override.readyGlowEnabled and frame.isOnUse
+        and not isOnCooldown and not auraActive
+    local glowColor = auraGlow and override.auraGlowColor or readyGlow and override.readyGlowColor
+    if (auraGlow or readyGlow) and override.glowColorOverride then
+        glowColor = override.glowColor or glowColor
+    end
+    if auraGlow or readyGlow then
+        if CDM.Glow and (not fd.cdmTrinketOverrideGlowActive
+            or fd.cdmTrinketOverrideGlowColor ~= glowColor) then
+            CDM.Glow:RequestBuffGlow(frame, true, glowColor, nil)
+            fd.cdmTrinketOverrideGlowActive = true
+            fd.cdmTrinketOverrideGlowColor = glowColor
         end
+    elseif fd.cdmTrinketOverrideGlowActive then
+        if CDM.Glow then CDM.Glow:RequestBuffGlow(frame, false) end
+        fd.cdmTrinketOverrideGlowActive = nil
+        fd.cdmTrinketOverrideGlowColor = nil
     end
 end
 
@@ -282,13 +337,14 @@ function CDM:InitializeTrinkets()
         "PLAYER_EQUIPMENT_CHANGED",
         "PLAYER_ENTERING_WORLD",
         "PLAYER_SPECIALIZATION_CHANGED",
+        "UNIT_AURA",
     }, function(_, event, arg1)
         if event == "PLAYER_EQUIPMENT_CHANGED" then
             if arg1 == TRINKET_SLOT_1 or arg1 == TRINKET_SLOT_2 then
                 trinketsTracker.InvalidateStyle()
                 CDM:UpdateTrinkets()
             end
-        else
+        elseif event ~= "UNIT_AURA" or arg1 == "player" then
             CDM:UpdateTrinkets()
         end
     end)
@@ -309,6 +365,7 @@ local function EnableTrinkets()
         updater:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
         updater:RegisterEvent("PLAYER_ENTERING_WORLD")
         updater:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+        updater:RegisterEvent("UNIT_AURA")
     end
     RegisterTrinketCooldownWatches()
     RegisterTrinketSpellWatches()
@@ -321,6 +378,7 @@ local function DisableTrinkets()
         updater:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED")
         updater:UnregisterEvent("PLAYER_ENTERING_WORLD")
         updater:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+        updater:UnregisterEvent("UNIT_AURA")
     end
     if CDM.UnwatchAllCooldowns then
         CDM.UnwatchAllCooldowns(TRINKETS_COOLDOWN_WATCH_OWNER)
@@ -330,13 +388,23 @@ local function DisableTrinkets()
     end
 
     for _, frame in ipairs(trinketsTracker.GetIconFrames()) do
+        local fd = CDM.GetFrameData(frame)
+        if fd.cdmTrinketOverrideGlowActive and CDM.Glow then
+            CDM.Glow:RequestBuffGlow(frame, false)
+            fd.cdmTrinketOverrideGlowActive = nil
+            fd.cdmTrinketOverrideGlowColor = nil
+        end
+        if fd.cdmTrinketAuraBorderActive and CDM.BORDER then
+            CDM.BORDER:RestoreToCurrentBorderColor(frame)
+            fd.cdmTrinketAuraBorderActive = nil
+        end
         frame:Hide()
     end
 
     trinketsTracker.Disable()
 end
 
-function CDM:UpdateTrinkets()
+function CDM:UpdateTrinkets(forceStyle)
     local container = trinketsTracker.GetContainer()
     if not container then return end
 
@@ -352,7 +420,7 @@ function CDM:UpdateTrinkets()
     end
 
     local styleDirty = trinketsTracker.ConsumeStyleDirty()
-    local queueEssentialViewer = anyTrinketDataChanged or styleDirty
+    local queueEssentialViewer = anyTrinketDataChanged or styleDirty or forceStyle
 
     for _, frame in ipairs(iconFrames) do
         local shouldShow = frame.itemID ~= nil
@@ -360,8 +428,18 @@ function CDM:UpdateTrinkets()
         local wasShown = frame:IsShown()
         if shouldShow then
             frame:Show()
-            UpdateIcon(frame)
+            UpdateIcon(frame, forceStyle or styleDirty)
         else
+            local fd = CDM.GetFrameData(frame)
+            if fd.cdmTrinketOverrideGlowActive and CDM.Glow then
+                CDM.Glow:RequestBuffGlow(frame, false)
+                fd.cdmTrinketOverrideGlowActive = nil
+                fd.cdmTrinketOverrideGlowColor = nil
+            end
+            if fd.cdmTrinketAuraBorderActive and CDM.BORDER then
+                CDM.BORDER:RestoreToCurrentBorderColor(frame)
+                fd.cdmTrinketAuraBorderActive = nil
+            end
             frame:Hide()
         end
         if wasShown ~= shouldShow then
@@ -424,3 +502,7 @@ end
 
 CDM.ReconcileTrinkets = ReconcileTrinkets
 CDM.OnTrinketsProfileApplied = OnTrinketsProfileApplied
+
+CDM:RegisterRefreshCallback("trinketSpellSettings", function()
+    CDM:UpdateTrinkets(true)
+end, 46, { "CD_DATA" })

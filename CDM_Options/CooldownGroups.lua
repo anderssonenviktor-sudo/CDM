@@ -68,6 +68,7 @@ end
 -- Returns slotID, itemID, name, icon for a trinket sentinel ID (nil otherwise).
 local function GetTrinketInfoForID(spellID)
     local slotID = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(spellID)
+        or CDM_C.GetNativeTrinketSlotFromSentinel and CDM_C.GetNativeTrinketSlotFromSentinel(spellID)
     if not slotID then return nil end
     local itemID = GetInventoryItemID("player", slotID)
     local name = itemID and C_Item.GetItemNameByID(itemID)
@@ -658,66 +659,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
         if not spellID then ClearRightPanel(); return end
 
         do
-            local trinketSlot, _, trinketName, trinketIcon = GetTrinketInfoForID(spellID)
-            if trinketSlot then
-                local _, rc = CreateRightScrollContent(200)
-                local header = rc:CreateFontString(nil, "ARTWORK", "CDM_Font18")
-                header:SetPoint("TOPLEFT", 0, 0)
-                header:SetText(trinketName)
-                header:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
-
-                local iconContainer = CreateFrame("Frame", nil, rc)
-                iconContainer:SetSize(40, 40)
-                iconContainer:SetPoint("TOPLEFT", 0, -40)
-                local iconTex = iconContainer:CreateTexture(nil, "ARTWORK")
-                iconTex:SetAllPoints()
-                if trinketIcon then iconTex:SetTexture(trinketIcon) end
-                CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
-                if CDM.BORDER and CDM.BORDER.CreateBorder then
-                    CDM.BORDER:CreateBorder(iconContainer)
-                    if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[iconContainer] = nil end
-                end
-
-                local note = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-                note:SetPoint("TOPLEFT", 0, -100)
-                note:SetPoint("RIGHT", rc, "RIGHT", -4, 0)
-                note:SetJustifyH("LEFT")
-                note:SetText(L["This icon mirrors the trinket equipped in this slot. Drag it like any other cooldown, or drop it into a group."])
-                UI.SetTextMuted(note)
-
-                local removeBtn = UI.CreateTextButton(rc)
-                removeBtn:SetSize(140, 22)
-                removeBtn:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
-                removeBtn:SetText(L["Remove Trinket"])
-                removeBtn:SetScript("OnClick", function()
-                    SetTrinketTracked(currentSpecID, trinketSlot, false)
-                    local groups = GetSpecGroups()
-                    if groups then
-                        for _, gd in ipairs(groups) do
-                            if gd.spells then Shared.RemoveSpellFromGroupList(gd.spells, spellID) end
-                        end
-                    end
-                    local orderBySpec = CDM.db.ungroupedCooldownOrder
-                    local order = orderBySpec and orderBySpec[currentSpecID]
-                    if order then
-                        for i = #order, 1, -1 do
-                            if order[i] == spellID then table.remove(order, i) end
-                        end
-                    end
-                    selectedSpellID = nil
-                    selectedSpellGroupIndex = nil
-                    ClearRightPanel()
-                    SaveAndRefresh()
-                    API:Refresh("TRACKERS")
-                    RefreshLeftPanelIfNeeded()
-                end)
-
-                rc:SetHeight(200)
-                return
-            end
-        end
-
-        do
             local customEntry = GetCustomEntryForID(spellID)
             if customEntry then
                 local customName, customIcon
@@ -896,9 +837,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
         local _, rc = CreateRightScrollContent(400)
         local yOff = 0
 
+        local _, _, trinketName, trinketIcon = GetTrinketInfoForID(spellID)
+        local customTrinketSlot = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(spellID)
         local _, nativeName, nativeIcon = GetNativeItemCategoryInfo(spellID)
         local displayID = GetDisplaySpellID(spellID)
-        local name = nativeName or C_Spell.GetSpellName(displayID) or ("Spell " .. spellID)
+        local name = trinketName or nativeName or C_Spell.GetSpellName(displayID) or ("Spell " .. spellID)
         local header = rc:CreateFontString(nil, "ARTWORK", "CDM_Font18")
         header:SetPoint("TOPLEFT", 0, yOff)
         header:SetText(name)
@@ -910,7 +853,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
         iconContainer:SetPoint("TOPLEFT", 0, yOff)
         local iconTex = iconContainer:CreateTexture(nil, "ARTWORK")
         iconTex:SetAllPoints()
-        local tex = nativeIcon or GetPromotedBuffTexture(spellID) or C_Spell.GetSpellTexture(displayID)
+        local tex = trinketIcon or nativeIcon or GetPromotedBuffTexture(spellID) or C_Spell.GetSpellTexture(displayID)
         if tex then iconTex:SetTexture(tex) end
         CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
         if CDM.BORDER and CDM.BORDER.CreateBorder then
@@ -994,11 +937,15 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 return EnsureUngroupedOverrideEntry(spellID)
             end
 
+            local suppressChecked = customTrinketSlot
+                and (not auraOv or auraOv.suppressGCD ~= false)
+                or (auraOv and auraOv.suppressGCD == true)
             local suppressGCD = UI.CreateModernCheckbox(rc, L["Suppress GCD"],
-                auraOv and auraOv.suppressGCD or false, function(checked)
+                suppressChecked, function(checked)
                     local ov = EnsureCooldownOverride()
                     if not ov then return end
-                    ov.suppressGCD = checked or nil
+                    if customTrinketSlot then ov.suppressGCD = checked
+                    else ov.suppressGCD = checked or nil end
                     SaveAndRefresh()
                 end)
             suppressGCD:SetPoint("TOPLEFT", 0, yOff)
@@ -1299,6 +1246,35 @@ local function CreateCooldownGroupsPanel(subPage, page)
             })
         end
 
+        if customTrinketSlot then
+            local removeBtn = UI.CreateTextButton(rc)
+            removeBtn:SetSize(140, 22)
+            removeBtn:SetPoint("TOPLEFT", 0, yOff)
+            removeBtn:SetText(L["Remove Trinket"])
+            removeBtn:SetScript("OnClick", function()
+                SetTrinketTracked(currentSpecID, customTrinketSlot, false)
+                local groups = GetSpecGroups()
+                if groups then
+                    for _, gd in ipairs(groups) do
+                        if gd.spells then Shared.RemoveSpellFromGroupList(gd.spells, spellID) end
+                    end
+                end
+                local orderBySpec = CDM.db.ungroupedCooldownOrder
+                local order = orderBySpec and orderBySpec[currentSpecID]
+                if order then
+                    for i = #order, 1, -1 do
+                        if order[i] == spellID then table.remove(order, i) end
+                    end
+                end
+                selectedSpellID = nil
+                selectedSpellGroupIndex = nil
+                ClearRightPanel()
+                SaveAndRefresh()
+                API:Refresh("TRACKERS")
+                RefreshLeftPanelIfNeeded()
+            end)
+            yOff = yOff - 36
+        end
         rc:SetHeight(math.abs(yOff) + 20)
     end
 
@@ -1325,7 +1301,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                             seen[cdID] = true
                             local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
                             if info and CDM_C.IsViewerEntryVisible(info) then
-                                local sid = CDM_C.ResolveViewerEntryIdentity(info)
+                                local sid = CDM_C.ResolveViewerEntryIdentity(info, cat)
                                 if sid then
                                     list[#list + 1] = { cdID = cdID, spellID = sid }
                                 end
@@ -1364,7 +1340,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                         seen[cdID] = true
                         local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
                         if info and CDM_C.IsViewerEntryVisible(info) then
-                            local sid = CDM_C.ResolveViewerEntryIdentity(info)
+                            local sid = CDM_C.ResolveViewerEntryIdentity(info, cat)
                             if sid and not activeSet[sid] then
                                 list[#list + 1] = { cdID = cdID, spellID = sid }
                             end
@@ -1408,11 +1384,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 and not seen[slot.cdID]
             then
                 seen[slot.cdID] = true
+                local _, _, trinketName, trinketIcon = GetTrinketInfoForID(spellID)
                 local _, nativeName, nativeIcon = GetNativeItemCategoryInfo(spellID)
                 local pickerDisplayID = GetDisplaySpellID(spellID)
-                local spellName = nativeName or C_Spell.GetSpellName(pickerDisplayID) or ("Spell " .. spellID)
-                local icon = nativeIcon or C_Spell.GetSpellTexture(pickerDisplayID)
-                local isKnown = nativeName ~= nil or IsPlayerSpell(spellID)
+                local spellName = trinketName or nativeName or C_Spell.GetSpellName(pickerDisplayID) or ("Spell " .. spellID)
+                local icon = trinketIcon or nativeIcon or C_Spell.GetSpellTexture(pickerDisplayID)
+                local isKnown = trinketName ~= nil or nativeName ~= nil or IsPlayerSpell(spellID)
                 result[#result + 1] = { spellID = spellID, cdID = slot.cdID, name = spellName, icon = icon, isKnown = isKnown }
             end
         end
@@ -1807,6 +1784,33 @@ local function CreateCooldownGroupsPanel(subPage, page)
             end
             if #buffEntries == 0 then buffsMenu:CreateTitle("No buffs available") end
 
+            local trinketMenu = rootDescription:CreateButton(L["Trinket"])
+            local availableTrinkets = 0
+            for _, slotID in ipairs(TRINKET_SLOT_IDS) do
+                local itemID = GetInventoryItemID("player", slotID)
+                local sentinel = GetTrinketSentinelForSlot(slotID)
+                local grouped = CDM.CooldownGroupSets and CDM.CooldownGroupSets.grouped
+                if itemID and not IsTrinketTracked(currentSpecID, slotID)
+                    and not (grouped and grouped[sentinel]) then
+                    availableTrinkets = availableTrinkets + 1
+                    local selectedSlotID = slotID
+                    local selectedSentinel = sentinel
+                    local name = C_Item.GetItemNameByID(itemID) or (L["Item"] .. " " .. itemID)
+                    local icon = C_Item.GetItemIconByID(itemID)
+                    local label = string.format(L["Trinket %d: %s"], slotID - 12, name)
+                    trinketMenu:CreateButton(AddMenuLabel(label, icon), function()
+                        SetTrinketTracked(currentSpecID, selectedSlotID, true)
+                        AppendUngroupedOrder(selectedSentinel)
+                        SaveAndRefresh()
+                        API:Refresh("TRACKERS")
+                        RefreshLeftPanelIfNeeded()
+                    end)
+                end
+            end
+            if availableTrinkets == 0 then
+                trinketMenu:CreateTitle(L["No equipped trinkets available"])
+            end
+
             local potionsMenu = rootDescription:CreateButton("Potions")
             local potionCount = 0
             local order, items = API.GetCustomCooldownBuiltinItems()
@@ -1920,7 +1924,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 local pickedTrinketSlot = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(sid)
                 if cdID then
                     local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                    if info and info.spellID then sid = info.spellID end
+                    if info and info.spellID
+                        and not (CDM_C.GetNativeTrinketSlotFromSentinel
+                            and CDM_C.GetNativeTrinketSlotFromSentinel(sid)) then
+                        sid = info.spellID
+                    end
                 elseif pickedTrinketSlot then
                     SetTrinketTracked(currentSpecID, pickedTrinketSlot, true)
                     API:Refresh("TRACKERS")

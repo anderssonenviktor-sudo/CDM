@@ -938,8 +938,15 @@ local function BuildUngroupedOrderRankMap(db)
     return ungroupedOrderRankScratch
 end
 
-local function GetCustomOrderRank(rankMap, frame, spellID)
+local function GetCustomOrderRank(rankMap, frame, spellID, isEssential)
     if not rankMap then return nil end
+    if isEssential and frame.cooldownInfo and CDM_C.GetNativeTrinketSentinelForSlot then
+        local slot = frame.cooldownInfo.equipSlot
+        if slot == 13 or slot == 14 then
+            local rank = rankMap[CDM_C.GetNativeTrinketSentinelForSlot(slot)]
+            if rank then return rank end
+        end
+    end
     local candidates = CDM.GetSpellIDCandidates and CDM:GetSpellIDCandidates(frame)
     if candidates then
         for i = 1, #candidates do
@@ -984,7 +991,7 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
         local spellID = ResolveBaseSpellID(frame)
         if spellID or frame.cooldownInfo then
             local record = PushTempIconPositionRecord(frame, ToSortNumber(frame.layoutIndex, 0), GetStableFrameSortID(frame))
-            record.customRank = rankMap and GetCustomOrderRank(rankMap, frame, spellID) or nil
+            record.customRank = rankMap and GetCustomOrderRank(rankMap, frame, spellID, isEssential) or nil
         end
     end
 

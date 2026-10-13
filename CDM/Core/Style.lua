@@ -330,6 +330,9 @@ end
 
 local function GetEffectiveCooldownSpellID(frame)
     if not frame then return nil end
+    if frame.slotID and frame.itemID and CDM_C.GetTrinketSentinelForSlot then
+        return CDM_C.GetTrinketSentinelForSlot(frame.slotID)
+    end
     local info = frame.cooldownInfo
     if not info then return nil end
     local id = info.overrideTooltipSpellID or info.overrideSpellID or info.spellID

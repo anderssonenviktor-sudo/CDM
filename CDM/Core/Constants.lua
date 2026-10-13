@@ -87,6 +87,20 @@ function CDM.CONST.GetTrinketSlotFromSentinel(id)
     return nil
 end
 
+-- Native equipment-slot viewer icons need a separate identity from the
+-- addon's injected trinket tracker so importing one never enables both.
+CDM.CONST.NATIVE_TRINKET_SENTINEL_BASE = 930000000
+
+function CDM.CONST.GetNativeTrinketSentinelForSlot(slotID)
+    return CDM.CONST.NATIVE_TRINKET_SENTINEL_BASE + slotID
+end
+
+function CDM.CONST.GetNativeTrinketSlotFromSentinel(id)
+    if id == CDM.CONST.NATIVE_TRINKET_SENTINEL_BASE + 13 then return 13 end
+    if id == CDM.CONST.NATIVE_TRINKET_SENTINEL_BASE + 14 then return 14 end
+    return nil
+end
+
 -- Custom cooldown items referenced from cooldown groups / the ungrouped
 -- cooldown order are stored as sentinel IDs (itemID + base) so they can never
 -- collide with real spell IDs. Custom cooldown spells use their spell ID as-is.
@@ -152,8 +166,13 @@ end
 -- stored identity on it would make group membership change as auras come and
 -- go. The plural `linkedSpellIDs` array is the static candidate list and is
 -- handled by the existing matching passes.
-function CDM.CONST.ResolveViewerEntryIdentity(info)
+function CDM.CONST.ResolveViewerEntryIdentity(info, category)
     if not info then return nil end
+    if (info.equipSlot == 13 or info.equipSlot == 14)
+        and Enum and Enum.CooldownViewerCategory
+        and (category or info.category) == Enum.CooldownViewerCategory.EquipSlotEssential then
+        return CDM.CONST.GetNativeTrinketSentinelForSlot(info.equipSlot)
+    end
     if CDM.IsSafeNumber(info.spellCategoryID) then
         return CDM.CONST.GetNativeItemSentinelForCategory(info.spellCategoryID)
     end

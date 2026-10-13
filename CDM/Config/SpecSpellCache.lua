@@ -58,7 +58,7 @@ local function CollectCategories(cats)
                     seen[cooldownID] = true
                     local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
                     if info and CDM.CONST.IsViewerEntryVisible(info) then
-                        local spellID = CDM.CONST.ResolveViewerEntryIdentity(info)
+                        local spellID = CDM.CONST.ResolveViewerEntryIdentity(info, cat)
                         result[#result + 1] = {
                             cooldownID = cooldownID,
                             spellID = spellID,

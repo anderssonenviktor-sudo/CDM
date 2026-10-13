@@ -40,13 +40,13 @@ local hasWarlockAccess = false
 -- combatLockout: cooldown starts after leaving combat
 local BUILTIN_ITEMS = {
     [271884] = { spellID = 1295247, alternateItemID = 271883 },                            -- Concentrated Silvermoon Healing Potion
-    [241304] = { spellID = 1234768, alternateItemID = 241305 },                            -- Silvermoon Health Potion
+    [241288] = { spellID = 1236994, alternateItemID = 241289 },                            -- Potion of Recklessness
     [241308] = { spellID = 1236616, alternateItemID = 241309 },                            -- Light's Potential
     [5512]   = { spellID = 6262, combatLockout = true, requiresWarlockAccess = true },     -- Healthstone
     [224464] = { spellID = 452930, class = "WARLOCK", requiresWarlockAccess = true },      -- Demonic Healthstone
 }
 
-local BUILTIN_ITEM_ORDER = { 5512, 224464, 271884, 241304, 241308 }
+local BUILTIN_ITEM_ORDER = { 5512, 224464, 271884, 241288, 241308 }
 
 -- Combat-lockout state is keyed by item ID rather than stored on the entry
 -- table: RebuildCustomEntries wipes and re-creates every entry (SPELLS_CHANGED

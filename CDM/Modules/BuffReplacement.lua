@@ -142,6 +142,15 @@ function CDM:PrepareBuffReplacements()
             end
         end
     end
+    local trinkets = self.GetTrinketIconFrames and self.GetTrinketIconFrames()
+    for _, target in ipairs(trinkets or {}) do
+        if target:IsShown() then
+            local entry = self:ResolveCooldownSpellOverride(target)
+            if entry and CDM.IsSafeNumber(entry.replaceBuffSpellID) then
+                targets[#targets + 1] = { frame = target, entry = entry }
+            end
+        end
+    end
     table.sort(targets, function(a, b) return (a.frame.cooldownID or 0) < (b.frame.cooldownID or 0) end)
     for _, candidate in ipairs(targets) do
         local target, entry = candidate.frame, candidate.entry
