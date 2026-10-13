@@ -611,7 +611,7 @@ local function ConvertBarGeometry(ctx, record)
         local keys = { { record.primary, "SCM_PrimaryResourceBar", "primaryBar" }, { record.secondary, "SCM_SecondaryResourceBar", "secondaryBar" } }
         for _, entry in ipairs(keys) do
             local key, modelName, section = unpack(entry)
-            local model = ResolvePosition(ctx, models, modelName, {})
+            local model = models[modelName]
             if key and CDM.RESOURCE_BAR_DEFAULTS[key] and model then
                 local class = key == "Mana" and "General" or record.class
                 local settings = ctx.data.resourceBarSettings or {}
@@ -621,21 +621,23 @@ local function ConvertBarGeometry(ctx, record)
                 local dest = settings[class][key]
                 ConvertResourceStyle(ctx, record.resources.data, record.resources.path, section, key, dest)
                 dest.loadMode = model.shown and "always" or "never"
-                if not model.invalid then
-                    dest.width, dest.height = model.width, model.height
-                    if model.anchorTarget == "screen" then
-                        dest.anchorTo, dest.anchorPoint, dest.anchorTargetPoint = "screen", "BOTTOM", "CENTER"
-                        dest.offsetX, dest.offsetY = model.x, model.y - model.height / 2
-                    elseif model.anchorTarget == "playerFrame" or model.anchorTarget == "essential" then
-                        dest.anchorTo, dest.anchorPoint, dest.anchorTargetPoint = model.anchorTarget, "CENTER", model.anchorRelativeTo
-                        dest.offsetX, dest.offsetY = model.x, model.y
-                    else
-                        ctx:Warn(L["A resource-bar anchor is not supported by CDM and its position was skipped."])
-                    end
-                    for _, field in ipairs({ "anchorFrame", "point", "relativePoint", "xOffset", "yOffset", "minWidth", "spacing", "growDirection" }) do ctx:Use(Path(record.resources.path, field)) end
-                    ctx:Use(Path(Path(record.resources.path, section), "matchAnchorWidth"))
-                    ctx:Use(Path(Path(record.resources.path, section), "heightAlternative"))
+                local stacked = section == "secondaryBar" and record.primary
+                    and models.SCM_PrimaryResourceBar and models.SCM_PrimaryResourceBar.shown
+                dest.anchorTo = stacked and record.primary or "essential"
+                dest.anchorPoint, dest.anchorTargetPoint = "BOTTOM", "TOP"
+                dest.offsetX, dest.offsetY = 0, 1
+                if stacked then dest.barSpacing = 1 end
+                local barConfig = Get(record.resources.data, section)
+                if Get(barConfig, "matchAnchorWidth") ~= false then
+                    dest.width = 0 -- CDM matches the Essential row when width is zero.
+                else
+                    local minimum = Number(Get(record.resources.data, "minWidth"), 1, 2000) or 200
+                    dest.width = math.max(minimum, Number(Get(barConfig, "width"), 1, 2000) or 200)
+                    ctx:Use(Path(record.resources.path, "minWidth"))
                 end
+                dest.height = model.height
+                ctx:Use(Path(Path(record.resources.path, section), "matchAnchorWidth"))
+                ctx:Use(Path(Path(record.resources.path, section), "heightAlternative"))
                 ctx:Use(Path(Path(record.resources.path, section), "enabled"))
                 ctx:Use(Path(Path(record.resources.path, section), "hideManaRoles"))
             end
@@ -689,6 +691,29 @@ local function AddModels(ctx, models, anchors, base, offset, general)
     end
 end
 
+local function BuiltInTarget(model)
+    local name = Get(model.config, "anchorName")
+    if type(name) ~= "string" then return nil end
+    name = name:match("^%s*(.-)%s*$"):lower()
+    if name == "essential" or name == "utility" then return name end
+    if name == "buff" or name == "buffs" then return "buff" end
+end
+
+local function GroupName(ctx, model, index, rowIndex)
+    local name = Get(model.config, "anchorName")
+    if type(name) == "string" and name ~= "" and #name < 256 then
+        ctx:Use(Path(model.path, "anchorName"))
+        if #model.rows == 1 then return name end
+        return string.format(L["%s (Row %d)"], name, rowIndex)
+    end
+    return string.format(L["Skiron Anchor %d, Row %d"], index, rowIndex)
+end
+
+local function FontSize(value, width, height)
+    if not Number(value, 0.01, 100) then return nil end
+    return value > 1 and value or math.max(1, math.floor(math.min(width, height) * value + 0.5))
+end
+
 local function ConvertSpec(ctx, specID, source, base, general)
     local version = Get(source, "profileVersion")
     if version ~= nil and (not Number(version, 0, 2) or version ~= math.floor(version)) then return false, "invalid_profile_version" end
@@ -717,25 +742,33 @@ local function ConvertSpec(ctx, specID, source, base, general)
                 local choices = {}
                 for category, groupIndex in pairs(sources) do
                     category, groupIndex = tonumber(category), ID(groupIndex)
-                    local kind = category == categories.TrackedBuff and "buff"
+                    local sourceKind = category == categories.TrackedBuff and "buff"
                         or category == categories.Essential and "essential"
                         or category == categories.Utility and "utility"
                     local group = groupIndex and Get(groupConfigs, groupIndex)
-                    if kind and models[groupIndex] and type(group) == "table" then
-                        choices[#choices + 1] = { kind = kind, index = groupIndex, category = category, config = group }
+                    local model = groupIndex and models[groupIndex]
+                    if sourceKind and model and type(group) == "table" then
+                        local target = BuiltInTarget(model)
+                        choices[#choices + 1] = {
+                            kind = target or (sourceKind == "buff" and "buffGroups" or "cooldownGroups"),
+                            family = sourceKind == "buff" and "buff" or "cooldown",
+                            index = groupIndex, category = category, config = group,
+                            targetCategory = target == "essential" and categories.Essential
+                                or target == "utility" and categories.Utility
+                                or target == "buff" and categories.TrackedBuff or category,
+                        }
                     end
                 end
                 table.sort(choices, function(a, b)
                     if a.index ~= b.index then return a.index < b.index end
                     return a.category < b.category
                 end)
-                -- Blizzard viewers own these icons. Preserve their category and
-                -- order without creating CDM custom groups for Skiron anchors.
+                -- Only anchors named for built-in rows stay ungrouped. Other
+                -- named anchors retain their own CDM groups.
                 local usedKinds = {}
                 for _, choice in ipairs(choices) do
-                    local family = choice.kind == "buff" and "buff" or "cooldown"
-                    if not usedKinds[family] then
-                        usedKinds[family] = choice.index
+                    if not usedKinds[choice.family] then
+                        usedKinds[choice.family] = choice.index
                         local groupPath = Path(Path(spellPath, "anchorGroup"), choice.index)
                         models[choice.index].entries[#models[choice.index].entries + 1] = {
                             id = spellID, kind = choice.kind,
@@ -746,15 +779,18 @@ local function ConvertSpec(ctx, specID, source, base, general)
                         local trackingID = cooldownID or -spellID
                         if not trackedIDs[trackingID] then
                             tracking.entries[#tracking.entries + 1] = {
-                                cooldownID = cooldownID, spellID = spellID, category = choice.category,
+                                cooldownID = cooldownID, spellID = spellID, category = choice.targetCategory,
                             }
                             trackedIDs[trackingID] = true
+                        end
+                        if BuiltInTarget(models[choice.index]) then
+                            ctx:Use(Path(models[choice.index].path, "anchorName"))
                         end
                         ctx:Use(Path(spellPath, "spellID"))
                         ctx:Use(Path(spellPath, "cooldownID"))
                         ctx:Use(Path(Path(spellPath, "source"), choice.category))
                         if Number(Get(choice.config, "order"), -100000, 100000) then ctx:Use(Path(groupPath, "order")) end
-                    elseif usedKinds[family] == choice.index then
+                    elseif usedKinds[choice.family] == choice.index then
                         ctx:Use(Path(Path(spellPath, "source"), choice.category))
                     else
                         ctx:Warn(L["Duplicate Skiron spell assignments use the first compatible group in each viewer."])
@@ -770,7 +806,8 @@ local function ConvertSpec(ctx, specID, source, base, general)
             if (slot == 13 or slot == 14) and models[index]
                 and Get(config, "useLoadClass") ~= true and Get(config, "useLoadRole") ~= true and Get(config, "useLoadRace") ~= true then
                 models[index].entries[#models[index].entries + 1] = {
-                    id = CDM.CONST.GetTrinketSentinelForSlot(slot), kind = "essential",
+                    id = CDM.CONST.GetTrinketSentinelForSlot(slot),
+                    kind = BuiltInTarget(models[index]) == "essential" and "essential" or "cooldownGroups",
                     order = Number(Get(config, "order"), -100000, 100000) or 999,
                 }
                 ctx.data.cooldownTrinkets = ctx.data.cooldownTrinkets or {}
@@ -791,6 +828,74 @@ local function ConvertSpec(ctx, specID, source, base, general)
         MakeRows(ctx, model)
     end
     AddBarModels(ctx, models, specID, source, base)
+    local grouped = { cooldownGroups = {}, buffGroups = {} }
+    for _, index in ipairs(NumericKeys(models)) do
+        local model = models[index]
+        for rowIndex, row in ipairs(model.rows) do
+            for _, kind in ipairs({ "cooldownGroups", "buffGroups" }) do
+                local spells, mixed, firstSlot, lastSlot = {}, false
+                for position = row.start, row.start + row.count - 1 do
+                    local entry = model.entries[position]
+                    if entry.kind == kind then
+                        if not grouped[kind][entry.id] then
+                            spells[#spells + 1] = entry.id
+                            grouped[kind][entry.id] = true
+                            firstSlot, lastSlot = firstSlot or (position - row.start), position - row.start
+                        else
+                            ctx:Warn(L["Duplicate Skiron spell assignments use the first compatible group in each viewer."])
+                        end
+                    elseif entry.kind == "cooldownGroups" or entry.kind == "buffGroups" then
+                        mixed = true
+                    end
+                end
+                if #spells > 0 then
+                    local resolved = ResolvePosition(ctx, models, index, {})
+                    ctx.data[kind] = ctx.data[kind] or {}
+                    ctx.data[kind][specID] = ctx.data[kind][specID] or {}
+                    local step = row.width + model.spacing
+                    local firstX = resolved.x - row.totalWidth / 2 + row.width / 2
+                    local direction = 1
+                    if model.grow == "RIGHT" then firstX = resolved.x - model.width / 2 + row.width / 2
+                    elseif model.grow == "LEFT" then firstX, direction = resolved.x + model.width / 2 - row.width / 2, -1 end
+                    local firstCenter = firstX + direction * firstSlot * step
+                    local lastCenter = firstX + direction * lastSlot * step
+                    local group = {
+                        name = GroupName(ctx, model, index, rowIndex),
+                        spells = spells, iconWidth = row.width, iconHeight = row.height,
+                        spacing = model.spacing, grow = "CENTER_H", anchorTarget = model.anchorTarget,
+                        anchorPoint = "CENTER", anchorRelativeTo = model.anchorRelativeTo,
+                        offsetX = (firstCenter + lastCenter) / 2,
+                        offsetY = model.y + (model.up and (-model.height / 2 + row.y + row.height / 2)
+                            or (model.height / 2 - row.y - row.height / 2)),
+                    }
+                    if model.grow == "RIGHT" then group.grow, group.offsetX = "RIGHT", firstCenter - row.width / 2
+                    elseif model.grow == "LEFT" then group.grow, group.offsetX = "LEFT", firstCenter + row.width / 2 end
+                    if kind == "buffGroups" and group.anchorTarget == "utility" then
+                        group.anchorTarget, group.anchorRelativeTo = "screen", "CENTER"
+                        group.offsetX, group.offsetY = 0, -100 - ((index - 1) % 100) * 60
+                        ctx:Warn(L["CDM buff groups cannot anchor to the utility viewer; a fallback screen position was used."])
+                    end
+                    local fontValue = Get(row.config, "cooldownFontSize")
+                    local fontPath = Path(row.path, "cooldownFontSize")
+                    if fontValue == nil then fontValue, fontPath = Get(general, "cooldownFontSize"), "globalSettings.cooldownFontSize" end
+                    group.cooldownFontSize = FontSize(fontValue, row.width, row.height)
+                    if group.cooldownFontSize then ctx:Use(fontPath) end
+                    local buff = kind == "buffGroups"
+                    MapFields(ctx, row.config, row.path, group, {
+                        { buff and "applicationsFontSize" or "chargeFontSize", buff and "countFontSize" or "chargeFontSize", "number", 1, 100 },
+                        { buff and "applicationsColour" or "chargeColour", buff and "countColor" or "chargeColor", "color" },
+                        { buff and "applicationsRelativePoint" or "chargeRelativePoint", buff and "countPosition" or "chargePosition", "point" },
+                        { buff and "applicationsXOffset" or "chargeXOffset", buff and "countOffsetX" or "chargeOffsetX", "number", -100, 100 },
+                        { buff and "applicationsYOffset" or "chargeYOffset", buff and "countOffsetY" or "chargeOffsetY", "number", -100, 100 },
+                    })
+                    if mixed then ctx:Warn(L["Mixed cooldown and buff rows became separate CDM groups; review their spacing."]) end
+                    local groups = ctx.data[kind][specID]
+                    groups[#groups + 1] = group
+                    ctx.groupCount = ctx.groupCount + 1
+                end
+            end
+        end
+    end
     local ordered = { essential = {}, utility = {} }
     local seen = {}
     local layout = {}
