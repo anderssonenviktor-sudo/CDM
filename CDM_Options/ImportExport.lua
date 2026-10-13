@@ -144,7 +144,219 @@ local function MapImportErrorCode(errCode)
     if errCode == "no_compatible_settings" then
         return L["No compatible SkironCDM settings found. Export a class or specialization profile, or include global settings."]
     end
+    if errCode == "invalid_blizzard_tracking" then
+        return L["Invalid Blizzard cooldown tracking data"]
+    end
     return L["Invalid profile data"]
+end
+
+local TRACKED_CATEGORIES = {}
+if Enum and Enum.CooldownViewerCategory then
+    local category = Enum.CooldownViewerCategory
+    for _, name in ipairs({ "Essential", "Utility", "TrackedBuff", "TrackedBar" }) do
+        if category[name] then TRACKED_CATEGORIES[category[name]] = true end
+    end
+end
+
+local function IsTrackedCategory(category)
+    return category ~= nil and not (issecretvalue and issecretvalue(category))
+        and TRACKED_CATEGORIES[category] == true
+end
+
+local function SafeID(value)
+    if value == nil or issecretvalue and issecretvalue(value) then return nil end
+    if type(value) ~= "number" or value ~= value or value < 1 or value > 2147483647
+        or value ~= math.floor(value) then return nil end
+    return value
+end
+
+local function GetBlizzardProvider()
+    local settings = _G.CooldownViewerSettings
+    if not settings or not settings.GetDataProvider then return nil end
+    local ok, provider = pcall(settings.GetDataProvider, settings)
+    if not ok then return nil end
+    if not provider or not provider.GetOrderedCooldownIDs or not provider.GetCooldownInfoForID then return nil end
+    return settings, provider
+end
+
+local function ReadProviderEntries(provider)
+    local ok, ids = pcall(provider.GetOrderedCooldownIDs, provider)
+    if not ok or type(ids) ~= "table" then return nil end
+    local result = {}
+    for _, cooldownID in ipairs(ids) do
+        if SafeID(cooldownID) then
+            local infoOK, info = pcall(provider.GetCooldownInfoForID, provider, cooldownID)
+            if not infoOK then return nil end
+            if type(info) == "table" then result[#result + 1] = { id = cooldownID, info = info } end
+        end
+    end
+    return result
+end
+
+local function CaptureBlizzardTracking()
+    -- Blizzard owns these choices. Store a snapshot in the export envelope,
+    -- not in CDM's sparse profile or SavedVariables.
+    local specID = SafeID(CDM:GetCurrentSpecID())
+    local _, provider = GetBlizzardProvider()
+    if not specID or not provider then return nil end
+    local providerEntries = ReadProviderEntries(provider)
+    if not providerEntries then return nil end
+    local entries = {}
+    for _, entry in ipairs(providerEntries) do
+        local category = entry.info.category
+        if IsTrackedCategory(category) then
+            entries[#entries + 1] = {
+                cooldownID = entry.id, spellID = SafeID(entry.info.spellID), category = category,
+            }
+        end
+    end
+    return { version = 1, specID = specID, entries = entries }
+end
+
+local function ValidateBlizzardTracking(value)
+    if value == nil then return nil end
+    if type(value) ~= "table" or value.version ~= 1 or not SafeID(value.specID)
+        or type(value.entries) ~= "table" then return nil, "invalid_blizzard_tracking" end
+    local entryCount = 0
+    for key in pairs(value.entries) do
+        if type(key) ~= "number" or key < 1 or key > 4096 or key ~= math.floor(key) then
+            return nil, "invalid_blizzard_tracking"
+        end
+        entryCount = entryCount + 1
+    end
+    if entryCount ~= #value.entries then return nil, "invalid_blizzard_tracking" end
+    local result, seen = { version = 1, specID = value.specID, entries = {} }, {}
+    for _, entry in ipairs(value.entries) do
+        if type(entry) ~= "table" or not TRACKED_CATEGORIES[entry.category]
+            or entry.cooldownID ~= nil and not SafeID(entry.cooldownID)
+            or entry.spellID ~= nil and not SafeID(entry.spellID)
+            or entry.cooldownID == nil and entry.spellID == nil then
+            return nil, "invalid_blizzard_tracking"
+        end
+        local identity = entry.cooldownID or -entry.spellID
+        if not seen[identity] then
+            result.entries[#result.entries + 1] = {
+                cooldownID = entry.cooldownID, spellID = entry.spellID, category = entry.category,
+            }
+            seen[identity] = true
+        end
+    end
+    return result
+end
+
+local function InferGroupTracking(profileData)
+    local specID = SafeID(CDM:GetCurrentSpecID())
+    if not specID or type(profileData) ~= "table" then return nil end
+    local categories = Enum and Enum.CooldownViewerCategory
+    if not categories then return nil end
+    local result, seen = { version = 1, specID = specID, entries = {} }, {}
+    for _, definition in ipairs({ { "cooldownGroups", categories.Essential }, { "buffGroups", categories.TrackedBuff } }) do
+        local bySpec = profileData[definition[1]]
+        local groups = type(bySpec) == "table" and (bySpec[specID] or bySpec[tostring(specID)])
+        if type(groups) == "table" then
+            for _, group in ipairs(groups) do
+                if type(group) == "table" and type(group.spells) == "table" then
+                    for _, spellID in ipairs(group.spells) do
+                        if SafeID(spellID) and spellID < CDM.CONST.TRINKET_SENTINEL_BASE and not seen[spellID] then
+                            result.entries[#result.entries + 1] = { spellID = spellID, category = definition[2] }
+                            seen[spellID] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return #result.entries > 0 and result or nil
+end
+
+local function FindMissingBlizzardTracking(tracking, alignCategories)
+    if not tracking then return {}, 0 end
+    if tracking.specID ~= CDM:GetCurrentSpecID() then return nil, "spec_mismatch" end
+    local settings, provider = GetBlizzardProvider()
+    if not provider then return nil, "unavailable" end
+    local providerEntries = ReadProviderEntries(provider)
+    if not providerEntries then return nil, "unavailable" end
+    local byID, bySpell = {}, {}
+    for _, entry in ipairs(providerEntries) do
+        byID[entry.id] = entry.info
+        local spellID = SafeID(entry.info.spellID)
+        local active = IsTrackedCategory(entry.info.category)
+        if spellID and (not bySpell[spellID] or active) then bySpell[spellID] = entry.id end
+        if type(entry.info.linkedSpellIDs) == "table" then
+            for _, linkedID in ipairs(entry.info.linkedSpellIDs) do
+                linkedID = SafeID(linkedID)
+                if linkedID and (not bySpell[linkedID] or active) then bySpell[linkedID] = entry.id end
+            end
+        end
+    end
+    local missing, unresolved, seen = {}, 0, {}
+    for _, wanted in ipairs(tracking.entries) do
+        local cooldownID = wanted.cooldownID
+        local info = cooldownID and byID[cooldownID]
+        if wanted.spellID and (not info or SafeID(info.spellID) ~= wanted.spellID) then
+            cooldownID = bySpell[wanted.spellID]
+            info = cooldownID and byID[cooldownID]
+        end
+        if not alignCategories and wanted.spellID and bySpell[wanted.spellID]
+            and IsTrackedCategory(byID[bySpell[wanted.spellID]].category) then
+            cooldownID = bySpell[wanted.spellID]
+            info = byID[cooldownID]
+        end
+        if info and not seen[cooldownID] then
+            seen[cooldownID] = true
+            local current = info.category
+            if current ~= nil and not (issecretvalue and issecretvalue(current))
+                and (not IsTrackedCategory(current) or alignCategories and current ~= wanted.category) then
+                local targetCategory = wanted.category
+                if not alignCategories and not wanted.cooldownID and C_CooldownViewer
+                    and C_CooldownViewer.GetCooldownViewerCooldownInfo then
+                    local ok, native = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cooldownID)
+                    if ok and type(native) == "table" and IsTrackedCategory(native.category) then
+                        targetCategory = native.category
+                    end
+                end
+                missing[#missing + 1] = {
+                    cooldownID = cooldownID, spellID = SafeID(info.spellID) or wanted.spellID,
+                    category = targetCategory,
+                }
+            end
+        elseif not info then unresolved = unresolved + 1 end
+    end
+    return missing, unresolved, settings, provider
+end
+
+function API:GetMissingBlizzardTracking(prepared)
+    return FindMissingBlizzardTracking(prepared and prepared.blizzardTracking,
+        prepared and prepared.sourceAddon == "SkironCooldownManager")
+end
+
+function API:AddMissingBlizzardTracking(prepared)
+    if InCombatLockdown() then return false, L["Cannot open config while in combat"] end
+    local missing, unresolved, settings, provider = self:GetMissingBlizzardTracking(prepared)
+    if not missing then
+        if unresolved == "spec_mismatch" then return false, L["Blizzard tracking belongs to another specialization."] end
+        return false, L["Blizzard cooldown settings are unavailable."]
+    end
+    local successStatus = Enum and Enum.CooldownLayoutStatus and Enum.CooldownLayoutStatus.Success
+    if not settings or not provider or not provider.SetCooldownToCategory or successStatus == nil then
+        return false, L["Blizzard cooldown settings are unavailable."]
+    end
+    local added, failed = 0, unresolved
+    for _, entry in ipairs(missing) do
+        local ok, status = pcall(provider.SetCooldownToCategory, provider, entry.cooldownID, entry.category)
+        if ok and status == successStatus then added = added + 1 else failed = failed + 1 end
+    end
+    if added > 0 then
+        local ok = pcall(settings.SaveCurrentLayout, settings)
+        if not ok then return false, L["Blizzard cooldown tracking changed but could not be saved."] end
+        if settings.RefreshLayout then pcall(settings.RefreshLayout, settings) end
+        CDM:Refresh("CD_DATA")
+        CDM:Refresh("BUFF_DATA")
+    end
+    if prepared.sourceAddon == "SkironCooldownManager" then
+        return true, string.format(L["Placed %d spells in Blizzard viewer rows (%d unavailable)."], added, failed)
+    end
+    return true, string.format(L["Added %d spells to Blizzard tracking (%d unavailable)."], added, failed)
 end
 
 local function GetCategoryOrder()
@@ -164,12 +376,17 @@ function API:ExportProfile(categories)
     if not ProfileIO or not ProfileIO.ExportSegmentedProfile then
         return nil
     end
+    local tracking = CaptureBlizzardTracking()
+    if not tracking then
+        print("|cffff0000[CDM Export]|r " .. L["Blizzard tracking is unavailable; the profile export will omit it."])
+    end
 
     local exportString, errCode, errValue = ProfileIO:ExportSegmentedProfile(
         CDM.db,
         categories,
         exportCategories,
-        CDM.activeProfileName
+        CDM.activeProfileName,
+        tracking
     )
 
     if exportString then
@@ -223,6 +440,9 @@ local function BuildPreparedImport(payload, conversionReport, existingProfiles)
     end
     prepared.sourceAddon = sourceAddon
     prepared.conversionReport = conversionReport
+    local tracking, trackingErr = ValidateBlizzardTracking(payload.blizzardTracking)
+    if trackingErr then return nil, MapImportErrorCode(trackingErr) end
+    prepared.blizzardTracking = tracking or InferGroupTracking(prepared.profileData)
     return prepared
 end
 
@@ -294,6 +514,9 @@ local function PrepareProfileCollection(payload)
         prepared.collection.defaultProfile = prepared.nameMap[payload.defaultProfile]
         if not prepared.collection.defaultProfile then prepared.skippedCount = prepared.skippedCount + 1 end
     end
+    local tracking, trackingErr = ValidateBlizzardTracking(payload.blizzardTracking)
+    if trackingErr then return nil, MapImportErrorCode(trackingErr) end
+    prepared.blizzardTracking = tracking
     return prepared
 end
 
@@ -320,6 +543,10 @@ local function ApplyPreparedImport(prepared)
 
     if API.MarkSpecDataDirty then
         API:MarkSpecDataDirty()
+    end
+    if prepared.isCollection and not prepared.blizzardTracking then
+        local active = prepared.collection.profiles[CDM.activeProfileName]
+        if active then prepared.blizzardTracking = InferGroupTracking(active) end
     end
 
     local msg
@@ -353,6 +580,10 @@ end
 function API:ExportAllProfiles()
     local payload = CollectionPayload(CDM_RebornDB, AddonName)
     if not payload then return nil, L["Invalid profile data"] end
+    payload.blizzardTracking = CaptureBlizzardTracking()
+    if not payload.blizzardTracking then
+        print("|cffff0000[CDM Export]|r " .. L["Blizzard tracking is unavailable; the profile export will omit it."])
+    end
     local encoded, err = ProfileIO:EncodePayload(CDM:DeepCopy(payload))
     if not encoded then return nil, MapImportErrorCode(err) end
     return encoded
@@ -394,13 +625,96 @@ local function ShowExternalImportNotice()
     externalImportNotice:Show()
 end
 
+local trackingNotice
+local function ShowBlizzardTrackingNotice(prepared, statusFont, importMessage)
+    local missing, unresolved = API:GetMissingBlizzardTracking(prepared)
+    if not missing then
+        local detail = unresolved == "spec_mismatch"
+            and L["Blizzard tracking belongs to another specialization. Import while using that specialization to add its spells."]
+            or L["Blizzard cooldown settings are unavailable."]
+        SetImportStatus(statusFont, true, importMessage .. " " .. detail)
+        return false
+    end
+    if #missing == 0 then
+        if unresolved > 0 then
+            SetImportStatus(statusFont, true, importMessage .. " "
+                .. string.format(L["%d exported spells are unavailable in Blizzard's cooldown settings."], unresolved))
+        end
+        return false
+    end
+
+    if not trackingNotice or trackingNotice.popup:GetParent() ~= ns.ConfigFrame then
+        local popup = UI.CreateModalOverlay()
+        local window = popup.window
+        window:SetSize(450, 270)
+        local title = UI.CreateHeader(window, L["Missing Blizzard tracked spells"])
+        title:ClearAllPoints()
+        title:SetPoint("TOPLEFT", 18, -42)
+        local message = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+        message:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -12)
+        message:SetWidth(414)
+        message:SetJustifyH("LEFT")
+        message:SetWordWrap(true)
+        UI.SetTextMuted(message)
+        local list = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+        list:SetPoint("TOPLEFT", message, "BOTTOMLEFT", 0, -12)
+        list:SetWidth(414)
+        list:SetJustifyH("LEFT")
+        list:SetWordWrap(true)
+        UI.SetTextMuted(list)
+        local add = UI.CreateTextButton(window)
+        add:SetSize(155, 26)
+        add:SetPoint("BOTTOMLEFT", 18, 18)
+        add:SetText(L["Add missing spells"])
+        local keep = UI.CreateTextButton(window)
+        keep:SetSize(155, 26)
+        keep:SetPoint("LEFT", add, "RIGHT", 8, 0)
+        keep:SetText(L["Keep current tracking"])
+        keep:SetScript("OnClick", function() popup:Hide() end)
+        trackingNotice = { popup = popup, title = title, message = message, list = list, add = add }
+    end
+
+    local names = {}
+    for index = 1, math.min(6, #missing) do
+        local spellID = missing[index].spellID
+        local name
+        if spellID and C_Spell and C_Spell.GetSpellName then
+            local ok, value = pcall(C_Spell.GetSpellName, spellID)
+            if ok and not (issecretvalue and issecretvalue(value)) and type(value) == "string" then name = value end
+        end
+        names[#names + 1] = name or string.format(L["Cooldown %d"], missing[index].cooldownID)
+    end
+    if #missing > #names then names[#names + 1] = string.format(L["and %d more"], #missing - #names) end
+    local isSkiron = prepared.sourceAddon == "SkironCooldownManager"
+    local message = isSkiron
+        and string.format(L["This Skiron import has %d spells missing from, or assigned to a different Blizzard viewer row. Place them in their exported Essential, Utility, or Buff rows?"], #missing)
+        or string.format(
+            L["This import includes %d entries that are not tracked in Blizzard's cooldown settings. Add them now? Existing tracked entries will stay enabled."],
+            #missing
+        )
+    if prepared.sourceAddon == "Ayije_CDM" or prepared.sourceAddon == "SkironCooldownManager" then
+        message = message .. " " .. L["Some anchors may need adjustment after importing this profile."]
+    end
+    trackingNotice.message:SetText(message)
+    trackingNotice.list:SetText(table.concat(names, ", "))
+    trackingNotice.title:SetText(isSkiron and L["Skiron viewer rows"] or L["Missing Blizzard tracked spells"])
+    trackingNotice.add:SetText(isSkiron and L["Place in viewer rows"] or L["Add missing spells"])
+    trackingNotice.add:SetScript("OnClick", function()
+        local ok, detail = API:AddMissingBlizzardTracking(prepared)
+        SetImportStatus(statusFont, ok, ok and (importMessage .. " " .. detail) or detail)
+        trackingNotice.popup:Hide()
+    end)
+    trackingNotice.popup:Show()
+    return true
+end
+
 local function CreateImportExportTab(page, tabId)
     local exportHeader = UI.CreateHeader(page, L["Export Profile"])
     exportHeader:SetPoint("TOPLEFT", 35, -40)
 
     local exportDesc = page:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     exportDesc:SetPoint("TOPLEFT", exportHeader, "BOTTOMLEFT", 0, -15)
-    exportDesc:SetText(L["Select categories to include, then click Export."])
+    exportDesc:SetText(L["Select categories to export. Blizzard tracking for this spec is included."])
     UI.SetTextMuted(exportDesc)
 
     local checkboxes = {}
@@ -513,8 +827,11 @@ local function CreateImportExportTab(page, tabId)
     local function ImportString(importString)
         local success, message, prepared = API:ImportProfile(importString)
         SetImportStatus(importStatus, success, message)
-        if success and (prepared.sourceAddon == "Ayije_CDM" or prepared.sourceAddon == "SkironCooldownManager") then
-            ShowExternalImportNotice()
+        if success then
+            local showingTracking = ShowBlizzardTrackingNotice(prepared, importStatus, message)
+            if not showingTracking and (prepared.sourceAddon == "Ayije_CDM" or prepared.sourceAddon == "SkironCooldownManager") then
+                ShowExternalImportNotice()
+            end
         end
     end
     importBtn:SetScript("OnClick", function()
@@ -535,9 +852,9 @@ local function CreateImportExportTab(page, tabId)
     ayijeBtn:SetPoint("LEFT", clearBtn, "RIGHT", 8, 0)
     ayijeBtn:SetText(L["Import all Ayije profiles"])
     ayijeBtn:SetScript("OnClick", function()
-        local success, message = API:ImportAllAyijeProfiles()
+        local success, message, prepared = API:ImportAllAyijeProfiles()
         SetImportStatus(importStatus, success, message)
-        if success then ShowExternalImportNotice() end
+        if success and not ShowBlizzardTrackingNotice(prepared, importStatus, message) then ShowExternalImportNotice() end
     end)
 
     local collectionHint = page:CreateFontString(nil, "ARTWORK", "CDM_Font12")

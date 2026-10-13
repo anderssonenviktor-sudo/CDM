@@ -103,7 +103,7 @@ function ProfileIO:ExportLegacyProfile(profileData, profileName)
     return self:EncodePayload(payload)
 end
 
-function ProfileIO:ExportSegmentedProfile(profileData, selectedCategories, categoryDefs, profileName)
+function ProfileIO:ExportSegmentedProfile(profileData, selectedCategories, categoryDefs, profileName, blizzardTracking)
     if type(profileData) ~= "table" then return nil end
 
     local keySet = {}
@@ -152,6 +152,7 @@ function ProfileIO:ExportSegmentedProfile(profileData, selectedCategories, categ
         addon = AddonName,
         timestamp = now,
     }
+    if blizzardTracking then payload.blizzardTracking = blizzardTracking end
     return self:EncodePayload(payload)
 end
 

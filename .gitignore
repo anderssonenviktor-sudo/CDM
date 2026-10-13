@@ -1,7 +1,6 @@
-# Ignore everything
-*
+/.baseline-local
+/.vscode
+/AGENTS.md
+/README.md
+/THIRD_PARTY.md
 
-# Allow these files/folders
-!.gitignore
-!CDM/
-!CDM_Options/**
