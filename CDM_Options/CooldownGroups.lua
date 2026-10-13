@@ -153,7 +153,7 @@ StaticPopupDialogs["CDM_CONFIRM_DELETE_CD_GROUP"] = {
 local function CreateCooldownGroupsPanel(subPage, page)
     local dbKey = "cooldownGroups"
     local tex = subPage:CreateTexture(nil, "ARTWORK")
-    tex:SetAtlas("Options_HorizontalDivider", true)
+    UI.StyleDivider(tex)
     tex:SetPoint("TOP", subPage, "TOP", 0, 0)
 
     local si = GetSpecialization()
@@ -1011,7 +1011,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 yOff = yOff - 22
 
                 local replacementDropdown = RegisterRightPanelDropdown(
-                    CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+                    UI.CreateDropdown(rc))
                 replacementDropdown:SetWidth(220)
                 replacementDropdown:SetPoint("TOPLEFT", 0, yOff)
                 local selectedID = auraOv and auraOv.replaceBuffCooldownID or 0
@@ -1282,7 +1282,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     colorAlpha = true,
                     save = SaveAndRefresh,
                     onToggle = function() ShowSpellSettings(spellID, groupIndex) end,
-                    createDropdown = function(p) return RegisterRightPanelDropdown(CreateFrame("DropdownButton", nil, p, "WowStyle1DropdownTemplate")) end,
+                    createDropdown = function(p) return RegisterRightPanelDropdown(UI.CreateDropdown(p)) end,
                 })
             end
         else
@@ -1295,7 +1295,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 colorAlpha = true,
                 save = SaveAndRefresh,
                 onToggle = function() ShowSpellSettings(spellID, nil) end,
-                createDropdown = function(p) return RegisterRightPanelDropdown(CreateFrame("DropdownButton", nil, p, "WowStyle1DropdownTemplate")) end,
+                createDropdown = function(p) return RegisterRightPanelDropdown(UI.CreateDropdown(p)) end,
             })
         end
 

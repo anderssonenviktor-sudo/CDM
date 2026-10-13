@@ -1904,6 +1904,92 @@ function CDM:ImportProfileData(profileName, profileData)
     return true
 end
 
+function CDM:GetProfileSchemaVersion()
+    return DB_SCHEMA_VERSION
+end
+
+-- An explicit collection import stages every profile and assignment before
+-- publishing them, then runs the existing profile lifecycle once.
+function CDM:ImportProfileCollectionData(collection)
+    if type(collection) ~= "table" or type(collection.profiles) ~= "table" or not next(collection.profiles) then
+        return false, "invalid_profile_data"
+    end
+    if not CDM_RebornDB or type(CDM_RebornDB.profiles) ~= "table" or type(CDM_RebornDB.profileKeys) ~= "table"
+        or type(CDM_RebornDB.global) ~= "table" then
+        return false, "db_not_initialized"
+    end
+    if InCombatLockdown() then return false, "combat_blocked" end
+    local version = collection.schemaVersion
+    if version == nil then version = 0 end
+    if type(version) ~= "number" or version < 0 or version > DB_SCHEMA_VERSION or version ~= math.floor(version) then
+        return false, "invalid_profile_version"
+    end
+    local profiles = {}
+    for name, profile in pairs(CDM_RebornDB.profiles) do profiles[name] = profile end
+    local ok, preparedKeys, preparedSpecs = pcall(function()
+        for name, profile in pairs(collection.profiles) do
+            if type(name) ~= "string" or name == "" or profiles[name] or type(profile) ~= "table" then
+                error("invalid_profile_data")
+            end
+            local prepared, err = PrepareProfileDataForApply(profile, version)
+            if not prepared then error(err or "invalid_profile_data") end
+            profiles[name] = prepared
+        end
+        local keys = CDM:DeepCopy(CDM_RebornDB.profileKeys)
+        local specs = CDM:DeepCopy(CDM_RebornDB.specProfiles or {})
+        for character, name in pairs(collection.profileKeys or {}) do
+            if type(character) ~= "string" or type(name) ~= "string" or not collection.profiles[name] then error("invalid_profile_data") end
+            keys[character] = name
+        end
+        for character, data in pairs(collection.specProfiles or {}) do
+            if type(character) ~= "string" or type(data) ~= "table" then error("invalid_profile_data") end
+            local dest = CDM:DeepCopy(specs[character] or {})
+            if data.enabled ~= nil then
+                if type(data.enabled) ~= "boolean" then error("invalid_profile_data") end
+                dest.enabled = data.enabled
+            end
+            for index, name in pairs(data) do
+                if index ~= "enabled" then
+                    if type(index) ~= "number" or index < 1 or index > 4 or index ~= math.floor(index)
+                        or type(name) ~= "string" or not collection.profiles[name] then error("invalid_profile_data") end
+                    dest[index] = name
+                end
+            end
+            specs[character] = dest
+        end
+        return keys, specs
+    end)
+    if not ok then return false, "invalid_profile_data" end
+    local default = collection.defaultProfile
+    if default ~= nil and (type(default) ~= "string" or not collection.profiles[default]) then return false, "invalid_profile_data" end
+    local name = preparedKeys[self.charKey] or self.activeProfileName
+    local specData, index = preparedSpecs[self.charKey], GetSpecialization()
+    if specData and specData.enabled and index and specData[index] then name = specData[index] end
+    if not profiles[name] then name = default or self.activeProfileName end
+    if not profiles[name] then return false, "profile_not_found" end
+    local db = CDM_RebornDB
+    local oldProfiles, oldKeys, oldSpecs = db.profiles, db.profileKeys, db.specProfiles
+    local oldDefault, oldActive, oldProfile = db.global.defaultProfile, CDM.activeProfileName, CDM.db
+    local committed = pcall(function()
+        db.profiles, db.profileKeys, db.specProfiles = profiles, preparedKeys, preparedSpecs
+        if default then db.global.defaultProfile = default end
+        CommitActiveProfileReference(name)
+        InvalidateProfileCaches()
+        CDM.RunProfileAppliedHooks()
+        if CDM.DisableBlizzardPlayerCastBar then CDM:DisableBlizzardPlayerCastBar() end
+        QueueCanonicalProfileRefresh({ rebuildOptions = true, targetTab = "importexport" })
+    end)
+    if not committed then
+        db.profiles, db.profileKeys, db.specProfiles = oldProfiles, oldKeys, oldSpecs
+        db.global.defaultProfile, CDM.activeProfileName, CDM.db = oldDefault, oldActive, oldProfile
+        InvalidateProfileCaches()
+        pcall(CDM.RunProfileAppliedHooks)
+        pcall(function() CDM:Refresh() end)
+        return false, "apply_failed"
+    end
+    return true
+end
+
 local cachedSpecID = nil
 
 function CDM:GetCurrentSpecID()

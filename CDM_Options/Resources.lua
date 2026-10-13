@@ -288,7 +288,7 @@ local function CreateResourcesTab(page, tabId)
     }, "display")
 
     local divider = rightArea:CreateTexture(nil, "ARTWORK")
-    divider:SetAtlas("Options_HorizontalDivider", true)
+    UI.StyleDivider(divider)
     local dividerH = divider:GetHeight()
     divider:ClearAllPoints()
     divider:SetPoint("TOPLEFT", subTabs.barFrame, "BOTTOMLEFT", -30, 0)
@@ -392,7 +392,7 @@ local function CreateResourcesTab(page, tabId)
         nameHeader:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 30
 
-        local copyDropdown = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+        local copyDropdown = UI.CreateDropdown(rc)
         copyDropdown:SetWidth(160)
         copyDropdown:SetPoint("TOPRIGHT", rc, "TOPRIGHT", 0, 0)
         copyDropdown:SetDefaultText(L["Copy settings from..."])
@@ -557,7 +557,7 @@ local function CreateResourcesTab(page, tabId)
         barTextureLabel:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 20
 
-        local ddBarTexture = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+        local ddBarTexture = UI.CreateDropdown(rc)
         ddBarTexture:SetPoint("TOPLEFT", 0, yOff)
         ddBarTexture:SetWidth(200)
         ddBarTexture:SetDefaultText(CDM:GetBarSettingForClass(classKey, barKey, "barTexture") or "Solid")
@@ -573,7 +573,7 @@ local function CreateResourcesTab(page, tabId)
         bgTextureLabel:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 20
 
-        local ddBgTexture = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+        local ddBgTexture = UI.CreateDropdown(rc)
         ddBgTexture:SetPoint("TOPLEFT", 0, yOff)
         ddBgTexture:SetWidth(200)
         ddBgTexture:SetDefaultText(CDM:GetBarSettingForClass(classKey, barKey, "bgTexture") or "Solid")
@@ -666,7 +666,7 @@ local function CreateResourcesTab(page, tabId)
 
         local currentAnchorTo = CDM:GetBarSettingForClass(classKey, barKey, "anchorTo") or "screen"
 
-        local ddAnchorTo = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+        local ddAnchorTo = UI.CreateDropdown(rc)
         ddAnchorTo:SetPoint("TOPLEFT", 0, yOff)
         ddAnchorTo:SetWidth(200)
         ddAnchorTo:SetDefaultText(UI.GetOptionLabel(anchorToOptions, currentAnchorTo, currentAnchorTo))
@@ -738,7 +738,7 @@ local function CreateResourcesTab(page, tabId)
             elseif aP == "RIGHT" and tP == "LEFT" then currentDir = "left"
             end
 
-            local ddStackDir = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+            local ddStackDir = UI.CreateDropdown(rc)
             ddStackDir:SetPoint("TOPLEFT", 0, yOff)
             ddStackDir:SetWidth(150)
             for _, opt in ipairs(stackOptions) do
@@ -775,7 +775,7 @@ local function CreateResourcesTab(page, tabId)
             apLabel:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 20
 
-            local ddAP = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+            local ddAP = UI.CreateDropdown(rc)
             ddAP:SetPoint("TOPLEFT", 0, yOff)
             ddAP:SetWidth(150)
             ddAP:SetDefaultText(CDM:GetBarSettingForClass(classKey, barKey, "anchorPoint") or "BOTTOM")
@@ -794,7 +794,7 @@ local function CreateResourcesTab(page, tabId)
             rpLabel:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 20
 
-            local ddTP = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+            local ddTP = UI.CreateDropdown(rc)
             ddTP:SetPoint("TOPLEFT", 0, yOff)
             ddTP:SetWidth(150)
             ddTP:SetDefaultText(CDM:GetBarSettingForClass(classKey, barKey, "anchorTargetPoint") or "TOP")
@@ -921,7 +921,7 @@ local function CreateResourcesTab(page, tabId)
         tagAnchorLabel:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 20
 
-        local ddTagAnchor = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+        local ddTagAnchor = UI.CreateDropdown(rc)
         ddTagAnchor:SetPoint("TOPLEFT", 0, yOff)
         ddTagAnchor:SetWidth(150)
         ddTagAnchor:SetDefaultText(CDM:GetBarSettingForClass(classKey, barKey, "tagAnchor") or "CENTER")
@@ -1113,7 +1113,7 @@ local function CreateResourcesTab(page, tabId)
         fallbackLabel:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 20
 
-        local ddFallback = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+        local ddFallback = UI.CreateDropdown(rc)
         ddFallback:SetPoint("TOPLEFT", 0, yOff)
         ddFallback:SetWidth(200)
         local currentFallback = CDM.db.moveBuffsDownFallback or "lastResource"

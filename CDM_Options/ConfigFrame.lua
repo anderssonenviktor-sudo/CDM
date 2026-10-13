@@ -98,14 +98,15 @@ end
 RegisterCombatConfigAutoClose()
 
 local function SetCategoryButtonState(button, isActive)
+    button.Selection:SetShown(isActive)
     if isActive then
-        button.Texture:SetAtlas("Options_List_Active")
-        button.Texture:Show()
+        button.Background:SetColorTexture(1, 1, 1, 0.055)
+        button.Background:Show()
         UI.SetTextWhite(button.Text)
         return
     end
 
-    button.Texture:Hide()
+    button.Background:Hide()
     UI.SetTextInactive(button.Text)
 end
 
@@ -165,17 +166,18 @@ end
 ns.ConfigCreatePage = CreateCategoryPage
 
 local categoryHeaders = {
-    { label = L["CDM"], tabs = {"layout", "buffgroups", "bars", "glow", "castbar", "resources", "border"} },
+    { tabs = {"layout", "buffgroups", "bars", "glow", "castbar", "resources", "border"} },
     { divider = true, tabs = {"profiles", "importexport"} },
 }
 
 local function CreateConfigFrame()
     if ConfigFrame then return end
 
-    ConfigFrame = CreateFrame("Frame", "CDMConfigFrame", UIParent, "SettingsFrameTemplate")
+    ConfigFrame = UI.CreateConfigWindow(UIParent, "CDMConfigFrame")
     ConfigFrame:SetSize(920, 720)
     ConfigFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     ConfigFrame:SetFrameStrata("HIGH")
+    ConfigFrame:SetClampedToScreen(true)
     ConfigFrame:Hide()
     tinsert(UISpecialFrames, "CDMConfigFrame")
     ConfigFrame:HookScript("OnHide", function()
@@ -193,29 +195,25 @@ local function CreateConfigFrame()
         end
     end)
 
-    if ConfigFrame.TitleText then
-        ConfigFrame.TitleText:SetText("")
-    end
-    if ConfigFrame.Bg then
-        ConfigFrame.Bg:SetFrameLevel(ConfigFrame:GetFrameLevel())
-    end
-
     local titleContainer = CreateFrame("Frame", nil, ConfigFrame)
-    titleContainer:SetPoint("TOP", ConfigFrame, "TOP", 0, -12)
-    titleContainer:SetSize(260, 64)
+    titleContainer:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 0, 0)
+    titleContainer:SetPoint("TOPRIGHT", ConfigFrame, "TOPRIGHT", 0, 0)
+    titleContainer:SetHeight(52)
     titleContainer:SetFrameLevel(ConfigFrame:GetFrameLevel() + 10)
 
     local titleLogo = titleContainer:CreateTexture(nil, "OVERLAY")
-    titleLogo:SetSize(96, 96)
-    titleLogo:SetPoint("CENTER")
+    titleLogo:SetSize(112, 112)
+    -- The logo artwork sits slightly below the center of its transparent canvas.
+    titleLogo:SetPoint("CENTER", titleContainer, "CENTER", 0, 3)
     titleLogo:SetTexture("Interface\\AddOns\\" .. ADDON_NAME .. "\\Media\\Textures\\cdmlightning2.tga")
 
-    local function CreateHeaderIconButton(textureName, iconSize)
+    local function CreateHeaderIconButton(textureName, iconSize, yOffset)
         local button = CreateFrame("Button", nil, titleContainer)
-        button:SetSize(36, 36)
+        button:SetSize(44, 44)
         local icon = button:CreateTexture(nil, "ARTWORK")
         icon:SetSize(iconSize, iconSize)
-        icon:SetPoint("CENTER")
+        -- Center the visible artwork, accounting for its transparent padding.
+        icon:SetPoint("CENTER", 0, yOffset or 0)
         icon:SetTexture("Interface\\AddOns\\" .. ADDON_NAME .. "\\Media\\Textures\\" .. textureName .. ".tga")
         icon:SetVertexColor(1, 0.82, 0, 1)
         icon:SetAlpha(0.82)
@@ -230,8 +228,8 @@ local function CreateConfigFrame()
         return button
     end
 
-    local cdmBtn = CreateHeaderIconButton("wrench", 42)
-    cdmBtn:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 25, -24)
+    local cdmBtn = CreateHeaderIconButton("wrench", 50, 1)
+    cdmBtn:SetPoint("LEFT", titleContainer, "LEFT", 16, 0)
     cdmBtn:SetScript("OnClick", function()
         if not CooldownViewerSettings then return end
         if CooldownViewerSettings:IsVisible() then
@@ -241,8 +239,8 @@ local function CreateConfigFrame()
         end
     end)
 
-    local editModeBtn = CreateHeaderIconButton("eye2", 54)
-    editModeBtn:SetPoint("LEFT", cdmBtn, "RIGHT", 2, 0)
+    local editModeBtn = CreateHeaderIconButton("eye2", 64, 1)
+    editModeBtn:SetPoint("LEFT", cdmBtn, "RIGHT", 4, 0)
     editModeBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["Edit Mode Settings"])
@@ -259,7 +257,7 @@ local function CreateConfigFrame()
         editModeOverlay:Show()
     end)
 
-    local anchorBtn = CreateHeaderIconButton("anchor2", 32)
+    local anchorBtn = CreateHeaderIconButton("anchor2", 38)
     anchorBtn:SetPoint("LEFT", editModeBtn, "RIGHT", 2, 0)
     anchorBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -305,15 +303,19 @@ local function CreateConfigFrame()
     ConfigFrame:SetScript("OnDragStart", ConfigFrame.StartMoving)
     ConfigFrame:SetScript("OnDragStop", ConfigFrame.StopMovingOrSizing)
 
-    -- Host the inner-frame atlas on a child so it renders above the template background.
-    local panelBgHolder = CreateFrame("Frame", nil, ConfigFrame)
-    panelBgHolder:SetAllPoints()
-    local panelBg = panelBgHolder:CreateTexture(nil, "BACKGROUND")
-    panelBg:SetAtlas("Options_InnerFrame", true)
-    panelBg:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 17, -64)
+    local panelBgHolder = CreateFrame("Frame", nil, ConfigFrame, "BackdropTemplate")
+    panelBgHolder:SetPoint("TOPLEFT", titleContainer, "BOTTOMLEFT", 8, 0)
+    panelBgHolder:SetPoint("BOTTOMRIGHT", ConfigFrame, "BOTTOMRIGHT", -8, 25)
+    panelBgHolder:SetBackdrop({
+        bgFile = CDM_C.TEX_WHITE8X8,
+        edgeFile = CDM_C.TEX_WHITE8X8,
+        edgeSize = 1,
+    })
+    panelBgHolder:SetBackdropColor(0.065, 0.065, 0.065, 0.4)
+    panelBgHolder:SetBackdropBorderColor(0.25, 0.25, 0.27, 1)
 
     versionText = ConfigFrame:CreateFontString(nil, "OVERLAY")
-    versionText:SetPoint("BOTTOMRIGHT", ConfigFrame, "BOTTOMRIGHT", -22, 10)
+    versionText:SetPoint("BOTTOMRIGHT", ConfigFrame, "BOTTOMRIGHT", -13, 10)
     ApplyFooterTextStyle(versionText)
     versionText:SetText(GetAddonVersionText() or "")
     if UI and UI.SetTextFaint then
@@ -323,13 +325,19 @@ local function CreateConfigFrame()
     end
 
     local Sidebar = CreateFrame("Frame", nil, ConfigFrame)
-    Sidebar:SetPoint("TOPLEFT", panelBg, "TOPLEFT", 1, 0)
-    Sidebar:SetPoint("BOTTOMLEFT", panelBg, "BOTTOMLEFT", 1, 0)
+    Sidebar:SetPoint("TOPLEFT", panelBgHolder, "TOPLEFT", 1, 0)
+    Sidebar:SetPoint("BOTTOMLEFT", panelBgHolder, "BOTTOMLEFT", 1, 0)
     Sidebar:SetWidth(180)
+
+    local sidebarDivider = panelBgHolder:CreateTexture(nil, "BORDER")
+    sidebarDivider:SetColorTexture(0.22, 0.22, 0.24, 0.45)
+    sidebarDivider:SetWidth(1)
+    sidebarDivider:SetPoint("TOPLEFT", Sidebar, "TOPRIGHT", 16, -12)
+    sidebarDivider:SetPoint("BOTTOMLEFT", Sidebar, "BOTTOMRIGHT", 16, 12)
 
     local Content = CreateFrame("Frame", nil, ConfigFrame)
     Content:SetPoint("TOPLEFT", Sidebar, "TOPRIGHT", 35, 0)
-    Content:SetPoint("BOTTOMRIGHT", -30, 25)
+    Content:SetPoint("BOTTOMRIGHT", panelBgHolder, "BOTTOMRIGHT", -13, 0)
 
     ns.ConfigContent = Content
     ns.ConfigFrame = ConfigFrame
@@ -346,90 +354,62 @@ local function CreateConfigFrame()
         CreateCategoryPage(tabDef.id, tabDef.label, Content)
     end
 
-    local headerIndex = 1
-    local function AddHeader(label, y)
-        local header = CreateFrame("Frame", nil, Sidebar, "SettingsCategoryListHeaderTemplate")
-        header:SetPoint("TOPLEFT", 0, y)
-
-        local atlasIndex = ((headerIndex - 1) % 3) + 1
-        local initializer = { data = { label = label, headerIndex = atlasIndex } }
-        header:Init(initializer)
-
-        headerIndex = headerIndex + 1
-        return header
-    end
-
     local function AddNav(id, label, y, indent)
         indent = indent or 0
         local btn = CreateFrame("Button", nil, Sidebar)
-        btn:SetSize(175 - indent, 22)  -- Match header width
+        btn:SetSize(175 - indent, 32)
         btn:SetPoint("TOPLEFT", indent, y)
 
-        btn.Texture = btn:CreateTexture(nil, "BACKGROUND")
-        btn.Texture:SetAllPoints(btn)
-        btn.Texture:Hide()
+        btn.Background = btn:CreateTexture(nil, "BACKGROUND")
+        btn.Background:SetAllPoints()
+
+        btn.Selection = btn:CreateTexture(nil, "ARTWORK")
+        btn.Selection:SetColorTexture(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 0.85)
+        btn.Selection:SetWidth(2)
+        btn.Selection:SetPoint("TOPLEFT", 4, -7)
+        btn.Selection:SetPoint("BOTTOMLEFT", 4, 7)
 
         btn.Text = btn:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-        btn.Text:SetPoint("LEFT", btn, "LEFT", indent, 0)
-        btn.Text:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+        btn.Text:SetPoint("LEFT", btn, "LEFT", 14, 0)
+        btn.Text:SetPoint("RIGHT", btn, "RIGHT", -10, 0)
         btn.Text:SetJustifyH("LEFT")
         btn.Text:SetWordWrap(false)
         btn.Text:SetText(label)
+        SetCategoryButtonState(btn, false)
 
         btn:SetScript("OnEnter", function(self)
             if currentTab ~= id then
-                self.Texture:SetAtlas("Options_List_Hover")
-                self.Texture:Show()
+                self.Background:SetColorTexture(1, 1, 1, 0.035)
+                self.Background:Show()
+                UI.SetTextWhite(self.Text)
             end
         end)
 
         btn:SetScript("OnLeave", function(self)
-            if currentTab ~= id then
-                self.Texture:Hide()
-            end
+            SetCategoryButtonState(self, currentTab == id)
         end)
 
         btn:SetScript("OnClick", function() SelectCategory(id) end)
         buttons[id] = btn
     end
 
-    local yOffset = -4
-    local tabIndent = 17
+    local yOffset = -12
+    local tabIndent = 8
 
     for _, category in ipairs(categoryHeaders) do
         if category.divider then
-            local gold = CDM_C.GOLD
-            local mutedGold = CreateColor(gold.r, gold.g, gold.b, 0.35)
-            local fadedGold = CreateColor(gold.r, gold.g, gold.b, 0)
-
-            local diamond = Sidebar:CreateTexture(nil, "ARTWORK")
-            diamond:SetColorTexture(gold.r, gold.g, gold.b, 0.5)
-            diamond:SetSize(7, 7)
-            diamond:SetPoint("CENTER", Sidebar, "TOP", 0, yOffset - 9)
-            diamond:SetRotation(math.pi / 4)
-
-            local leftLine = Sidebar:CreateTexture(nil, "ARTWORK")
-            leftLine:SetColorTexture(1, 1, 1)
-            leftLine:SetSize(74, 2)
-            leftLine:SetPoint("RIGHT", diamond, "LEFT", -7, 0)
-            leftLine:SetGradient("HORIZONTAL", fadedGold, mutedGold)
-
-            local rightLine = Sidebar:CreateTexture(nil, "ARTWORK")
-            rightLine:SetColorTexture(1, 1, 1)
-            rightLine:SetSize(74, 2)
-            rightLine:SetPoint("LEFT", diamond, "RIGHT", 7, 0)
-            rightLine:SetGradient("HORIZONTAL", mutedGold, fadedGold)
-            yOffset = yOffset - 26
-        else
-            AddHeader(category.label, yOffset)
-            yOffset = yOffset - 34
+            local divider = Sidebar:CreateTexture(nil, "ARTWORK")
+            divider:SetColorTexture(0.3, 0.3, 0.32, 0.4)
+            divider:SetSize(147, 1)
+            divider:SetPoint("TOPLEFT", 22, yOffset - 10)
+            yOffset = yOffset - 30
         end
 
         for _, tabId in ipairs(category.tabs) do
             local tabDef = ns.ConfigTabs and ns.ConfigTabs[tabId]
             if tabDef then
                 AddNav(tabDef.id, tabDef.label, yOffset, tabIndent)
-                yOffset = yOffset - 24
+                yOffset = yOffset - 38
             end
         end
 

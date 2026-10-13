@@ -1138,7 +1138,7 @@ end
 function Shared.CreateSpecDropdown(parent, anchorPoint, anchorX, anchorY, config)
     local L = Runtime.L
 
-    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+    local dropdown = UI.CreateDropdown(parent)
     dropdown:SetWidth(200)
     dropdown:SetPoint(anchorPoint, parent, anchorPoint, anchorX, anchorY)
 
@@ -1473,7 +1473,7 @@ function Shared.RenderGroupSettingsPanel(config)
     growLabel:SetPoint("TOPLEFT", 0, yOff)
     yOff = yOff - 22
 
-    local growDropdown = registerDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+    local growDropdown = registerDropdown(UI.CreateDropdown(rc))
     growDropdown:SetWidth(180)
     growDropdown:SetPoint("TOPLEFT", 0, yOff)
     growDropdown:SetDefaultText(Shared.GetGrowLabel(gd.grow or "RIGHT"))
@@ -1559,7 +1559,7 @@ function Shared.RenderGroupSettingsPanel(config)
     secPosLabel:SetPoint("TOPLEFT", 0, yOff)
     yOff = yOff - 22
 
-    local secPosDropdown = registerDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+    local secPosDropdown = registerDropdown(UI.CreateDropdown(rc))
     secPosDropdown:SetWidth(180)
     secPosDropdown:SetPoint("TOPLEFT", 0, yOff)
     secPosDropdown:SetDefaultText(gd[tf.posKey] or tf.posDefault)
@@ -1595,7 +1595,7 @@ function Shared.RenderGroupSettingsPanel(config)
 
     local UpdateAnchorVisibility
     local xSlider, ySlider
-    local anchorTargetDropdown = registerDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+    local anchorTargetDropdown = registerDropdown(UI.CreateDropdown(rc))
     anchorTargetDropdown:SetWidth(180)
     anchorTargetDropdown:SetPoint("TOPLEFT", 0, yOff)
     local currentTarget = gd.anchorTarget or "screen"
@@ -1630,7 +1630,7 @@ function Shared.RenderGroupSettingsPanel(config)
     anchorLabel:SetPoint("TOPLEFT", 0, yOff)
     yOff = yOff - 22
 
-    local anchorDropdown = registerDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+    local anchorDropdown = registerDropdown(UI.CreateDropdown(rc))
     anchorDropdown:SetWidth(180)
     anchorDropdown:SetPoint("TOPLEFT", 0, yOff)
     anchorDropdown:SetDefaultText(gd.anchorPoint or "CENTER")
@@ -1644,7 +1644,7 @@ function Shared.RenderGroupSettingsPanel(config)
     relLabel:SetPoint("TOPLEFT", 0, yOff)
     yOff = yOff - 22
 
-    local relDropdown = registerDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+    local relDropdown = registerDropdown(UI.CreateDropdown(rc))
     relDropdown:SetWidth(180)
     relDropdown:SetPoint("TOPLEFT", 0, yOff)
     relDropdown:SetDefaultText(gd.anchorRelativeTo or "CENTER")

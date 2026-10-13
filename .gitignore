@@ -1,41 +1,7 @@
-# Local editors, agents, worktrees and development environments
-/.worktrees/
-/.vscode/
-/.idea/
-/.claude/
-/.codex/
-/.agents/
-/.aws/
-/.baseline-local/
-/dev-tools/
-/design/
-/scratch/
-/tmp/
-.venv/
-venv/
-node_modules/
-__pycache__/
-*.py[cod]
+# Ignore everything
+*
 
-# Temporary files, logs, packages and local settings backups
-*.tmp
-*.temp
-*.bak
-*.orig
-*.rej
-*.swp
-*.swo
-*~
-*.log
-*.zip
-*.7z
-*.luac
-.DS_Store
-Thumbs.db
-desktop.ini
-SavedVariables/
-WTF/
-settings-backups/
-
-# Addon Lua, XML, TOCs, documentation, tools and bundled media stay tracked.
-
+# Allow these files/folders
+!.gitignore
+!CDM/
+!CDM_Options/**

@@ -24,7 +24,7 @@ local function CreateLayoutTab(page, tabId)
     local generalPage = subPages.general
 
     local divider = generalPage:CreateTexture(nil, "ARTWORK")
-    divider:SetAtlas("Options_HorizontalDivider", true)
+    UI.StyleDivider(divider)
     divider:SetPoint("TOP", generalPage, "TOP", 0, 0)
 
     local content, scrollFrame = UI.CreateScrollableTab(generalPage, "CDM_LayoutGeneralScrollFrame", 520)

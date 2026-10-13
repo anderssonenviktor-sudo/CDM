@@ -50,7 +50,7 @@ local function BuildGlowSettings(page, onHeightChanged)
     lblType:SetText(L["Glow Type"])
     lblType:SetPoint("TOPLEFT", mainHeader, "BOTTOMLEFT", 0, -15)
 
-    local ddType = CreateFrame("DropdownButton", nil, scrollChild, "WowStyle1DropdownTemplate")
+    local ddType = UI.CreateDropdown(scrollChild)
     ddType:SetPoint("TOPLEFT", lblType, "BOTTOMLEFT", 0, -10)
     ddType:SetWidth(200)
 
@@ -73,7 +73,7 @@ local function BuildGlowSettings(page, onHeightChanged)
     colorLabel:SetText(L["Glow Color"])
     colorLabel:SetPoint("TOPLEFT", ddType, "BOTTOMLEFT", 0, -15)
 
-    local ddColor = CreateFrame("DropdownButton", nil, scrollChild, "WowStyle1DropdownTemplate")
+    local ddColor = UI.CreateDropdown(scrollChild)
     ddColor:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -10)
     ddColor:SetWidth(200)
     ddColor:SetDefaultText(UI.GetOptionLabel(glowColorOptions, CDM.db.glowColorMode, L["Default"]))

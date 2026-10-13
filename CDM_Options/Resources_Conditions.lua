@@ -205,7 +205,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
     local xOff = 0
 
     local varOpts = BuildVarOptions(classKey, barKey)
-    local varDD = CreateFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
+    local varDD = UI.CreateDropdown(row)
     varDD:SetPoint("LEFT", xOff, 0)
     varDD:SetWidth(130)
     varDD:SetDefaultText(VAR_LABELS[check.var] or check.var)
@@ -233,7 +233,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
     xOff = xOff + 135
 
     if check.var == "powerValue" or check.var == "powerPercent" then
-        local cmpDD = CreateFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
+        local cmpDD = UI.CreateDropdown(row)
         cmpDD:SetPoint("LEFT", xOff, 0)
         cmpDD:SetWidth(65)
         cmpDD:SetDefaultText(check.cmp or ">=")
@@ -268,7 +268,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
             pctLabel:SetText("%")
         end
     elseif check.var == "spec" then
-        local cmpDD = CreateFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
+        local cmpDD = UI.CreateDropdown(row)
         cmpDD:SetPoint("LEFT", xOff, 0)
         cmpDD:SetWidth(65)
         cmpDD:SetDefaultText(check.cmp or "==")
@@ -279,7 +279,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
         xOff = xOff + 70
 
         local specList = GetSpecList()
-        local specDD = CreateFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
+        local specDD = UI.CreateDropdown(row)
         specDD:SetPoint("LEFT", xOff, 0)
         specDD:SetWidth(120)
         local specName = ""
@@ -292,7 +292,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
             function(val) check.value = val; onChange() end)
         if registerDropdown then registerDropdown(specDD) end
     elseif check.var == "powerFull" then
-        local toggleDD = CreateFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
+        local toggleDD = UI.CreateDropdown(row)
         toggleDD:SetPoint("LEFT", xOff, 0)
         toggleDD:SetWidth(130)
         toggleDD:SetDefaultText(check.value == true and L["Is Full"] or L["Is Not Full"])
@@ -301,7 +301,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
             function(val) check.value = val; onChange() end)
         if registerDropdown then registerDropdown(toggleDD) end
     elseif check.var == "pipRecharging" then
-        local toggleDD = CreateFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
+        local toggleDD = UI.CreateDropdown(row)
         toggleDD:SetPoint("LEFT", xOff, 0)
         toggleDD:SetWidth(150)
         toggleDD:SetDefaultText(check.value == true and L["Is Recharging"] or L["Is Not Recharging"])
@@ -419,7 +419,7 @@ local function ShowBarConditions(condPage, condManager, classKey, barKey)
             targetLabel:SetText(L["Target:"])
 
             local targetOpts = BuildTargetOptions(barKey, classKey)
-            local targetDD = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+            local targetDD = UI.CreateDropdown(rc)
             targetDD:SetPoint("LEFT", targetLabel, "RIGHT", 8, 0)
             targetDD:SetWidth(100)
             local curTarget = rule.target and tostring(rule.target) or "nil"
@@ -559,7 +559,7 @@ local function ShowBarConditions(condPage, condManager, classKey, barKey)
         yOff = yOff - 30
 
         local divider = rc:CreateTexture(nil, "ARTWORK")
-        divider:SetAtlas("Options_HorizontalDivider", true)
+        UI.StyleDivider(divider)
         divider:SetPoint("TOPLEFT", 0, yOff)
         divider:SetPoint("RIGHT", -10, 0)
         local dH = divider:GetHeight()

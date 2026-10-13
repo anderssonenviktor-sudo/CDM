@@ -45,7 +45,7 @@ local function PositionDropdown(rc, label, key, yOff, positions)
     lbl:SetText(label)
     lbl:SetPoint("TOPLEFT", 0, yOff)
 
-    local dd = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+    local dd = UI.CreateDropdown(rc)
     dd:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -10)
     dd:SetWidth(180)
     dd:SetDefaultText(CDM.db[key] or CDM.defaults[key] or "CENTER")
@@ -62,7 +62,7 @@ end
 
 local function BuildCooldownText(subPage, page)
     local divider = subPage:CreateTexture(nil, "ARTWORK")
-    divider:SetAtlas("Options_HorizontalDivider", true)
+    UI.StyleDivider(divider)
     divider:SetPoint("TOP", subPage, "TOP", 0, 0)
 
     local rc = CreateFrame("Frame", nil, subPage)
@@ -192,7 +192,7 @@ ns._CreateCooldownTextPanel = BuildCooldownText
 
 local function BuildBuffIcons(subPage, page)
     local divider = subPage:CreateTexture(nil, "ARTWORK")
-    divider:SetAtlas("Options_HorizontalDivider", true)
+    UI.StyleDivider(divider)
     divider:SetPoint("TOP", subPage, "TOP", 0, 0)
 
     local rc = CreateFrame("Frame", nil, subPage)

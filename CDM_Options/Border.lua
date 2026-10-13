@@ -22,7 +22,7 @@ local function FontDropdown(rc, yOff, page)
     lbl:SetText(L["Font"])
     lbl:SetPoint("TOPLEFT", 0, yOff)
 
-    local dd = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+    local dd = UI.CreateDropdown(rc)
     dd:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -10)
     dd:SetWidth(220)
     dd:SetDefaultText(CDM.db.textFont or CDM.defaults.textFont or "Expressway")
@@ -38,7 +38,7 @@ local function OutlineDropdown(rc, yOff, page)
     lbl:SetText(L["Font Outline"])
     lbl:SetPoint("TOPLEFT", 0, yOff)
 
-    local dd = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+    local dd = UI.CreateDropdown(rc)
     dd:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -10)
     dd:SetWidth(220)
     dd:SetDefaultText(OutlineLabel(CDM.db.textFontOutline))
@@ -79,7 +79,7 @@ local function BuildBorders(subPage, page)
     lblDropdown:SetText(L["Border Texture"])
     lblDropdown:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 25
 
-    local ddBorder = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+    local ddBorder = UI.CreateDropdown(rc)
     ddBorder:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 40
     ddBorder:SetWidth(220)
     ddBorder:SetDefaultText(CDM.db.borderFile or L["Select Border..."])

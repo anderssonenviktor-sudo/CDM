@@ -100,7 +100,7 @@ local function CreateAssistPanel(scrollChild, page)
     lblPos:SetText(L["Position"])
     lblPos:SetPoint("TOPLEFT", page.assistColorPicker, "BOTTOMLEFT", 0, -15)
 
-    local ddPos = CreateFrame("DropdownButton", nil, scrollChild, "WowStyle1DropdownTemplate")
+    local ddPos = UI.CreateDropdown(scrollChild)
     ddPos:SetPoint("TOPLEFT", lblPos, "BOTTOMLEFT", 0, -10)
     ddPos:SetWidth(180)
     ddPos:SetDefaultText(CDM.db.assistPosition or "TOPRIGHT")

@@ -14,16 +14,333 @@ local GOLD = CDM_C.GOLD or { r = 1, g = 0.82, b = 0, a = 1 }
 local WHITE = CDM_C.WHITE or { r = 1, g = 1, b = 1, a = 1 }
 
 local colorSwatchesByKey = {}
-local TEXT_BUTTON_BACKGROUND_ALPHA = 0.6
+
+local function CreateControlSurface(frame, pooled)
+    local function Texture(layer)
+        local texture = pooled and frame:AttachTexture() or frame:CreateTexture(nil, layer)
+        texture:SetDrawLayer(layer)
+        return texture
+    end
+
+    local background = Texture("BACKGROUND")
+    background:SetAllPoints()
+    local borders = {}
+    local top = Texture("BORDER")
+    top:SetPoint("TOPLEFT")
+    top:SetPoint("TOPRIGHT")
+    top:SetHeight(1)
+    local bottom = Texture("BORDER")
+    bottom:SetPoint("BOTTOMLEFT")
+    bottom:SetPoint("BOTTOMRIGHT")
+    bottom:SetHeight(1)
+    local left = Texture("BORDER")
+    left:SetPoint("TOPLEFT")
+    left:SetPoint("BOTTOMLEFT")
+    left:SetWidth(1)
+    local right = Texture("BORDER")
+    right:SetPoint("TOPRIGHT")
+    right:SetPoint("BOTTOMRIGHT")
+    right:SetWidth(1)
+    borders[1], borders[2], borders[3], borders[4] = top, bottom, left, right
+    return background, borders
+end
+
+local function SetControlBorder(borders, r, g, b, a)
+    for _, border in ipairs(borders) do
+        border:SetColorTexture(r, g, b, a or 1)
+    end
+end
+
+local function CreateChevron(frame, point, relativeTo, relativePoint, x, y)
+    local left = frame:CreateTexture(nil, "OVERLAY")
+    local right = frame:CreateTexture(nil, "OVERLAY")
+    left:SetSize(6, 1.5)
+    right:SetSize(6, 1.5)
+    left:SetPoint(point, relativeTo, relativePoint, x - 2, y)
+    right:SetPoint(point, relativeTo, relativePoint, x + 2, y)
+    left:SetRotation(-math.pi / 4)
+    right:SetRotation(math.pi / 4)
+    return left, right
+end
+
+function UI.StyleDivider(texture)
+    texture:SetColorTexture(0.25, 0.25, 0.27, 0.6)
+    texture:SetHeight(1)
+end
+
+local ConfigMenuStyle = CreateFromMixins(MenuStyle1Mixin)
+local MENU_INSET = { left = 6, right = 6, top = 8, bottom = 8 }
+local MENU_ROW_HEIGHT = 26
+local MENU_CHILD_PADDING = { width = 0, height = 0 }
+
+function ConfigMenuStyle:GetInset()
+    return MENU_INSET
+end
+
+function ConfigMenuStyle:GetChildExtentPadding()
+    -- Row initializers include their own text and arrow padding.
+    return MENU_CHILD_PADDING
+end
+
+function ConfigMenuStyle:Generate()
+    -- AttachTexture participates in the menu compositor's pool/reset lifecycle.
+    local shadow = self:AttachTexture()
+    shadow:SetDrawLayer("BACKGROUND", -1)
+    shadow:SetPoint("TOPLEFT", -3, 3)
+    shadow:SetPoint("BOTTOMRIGHT", 3, -3)
+    shadow:SetColorTexture(0, 0, 0, 0.35)
+
+    local background, borders = CreateControlSurface(self, true)
+    background:SetColorTexture(0.055, 0.055, 0.065, 1)
+    SetControlBorder(borders, 0.28, 0.28, 0.31, 1)
+end
+
+local function StyleMenuElement(frame, description)
+    local fontString = frame.fontString
+    if not fontString then return end
+
+    local selected = frame.leftTexture2 ~= nil
+    local textLeft = frame.leftTexture1 and 28 or 10
+    fontString:SetFontObject("CDM_Font12")
+    fontString:ClearAllPoints()
+    fontString:SetPoint("LEFT", textLeft, 0)
+    fontString:SetHeight(MENU_ROW_HEIGHT)
+    -- Refit after changing the font so long media names retain their full width.
+    fontString:SetTextToFit(fontString:GetText())
+    if selected then
+        fontString:SetTextColor(GOLD.r, GOLD.g, GOLD.b, 1)
+        local selection = frame:AttachTexture()
+        selection:SetDrawLayer("BACKGROUND", -1)
+        selection:SetPoint("TOPLEFT", 0, -1)
+        selection:SetPoint("BOTTOMRIGHT", 0, 1)
+        selection:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 0.09)
+    end
+    if frame.highlight then
+        frame.highlight:ClearAllPoints()
+        frame.highlight:SetPoint("TOPLEFT", 0, -1)
+        frame.highlight:SetPoint("BOTTOMRIGHT", 0, 1)
+        frame.highlight:SetColorTexture(1, 1, 1, 0.08)
+        frame.highlight:SetBlendMode("BLEND")
+    end
+    if frame.leftTexture1 then
+        frame.leftTexture1:ClearAllPoints()
+        frame.leftTexture1:SetPoint("LEFT", 8, 0)
+        frame.leftTexture1:SetSize(12, 12)
+        if description:IsRadio() then
+            -- Single-choice lists only need a mark beside the selected row.
+            frame.leftTexture1:Hide()
+        end
+    end
+    if frame.leftTexture2 then
+        frame.leftTexture2:SetAtlas("common-dropdown-icon-checkmark-yellow")
+        frame.leftTexture2:SetSize(14, 14)
+        frame.leftTexture2:ClearAllPoints()
+        frame.leftTexture2:SetPoint("LEFT", 7, 0)
+    end
+    if frame.arrow then
+        frame.arrow:SetTexture("Interface\\AddOns\\CDM\\Media\\Textures\\collapse")
+        frame.arrow:SetRotation(-math.pi / 2)
+        frame.arrow:SetSize(10, 10)
+        frame.arrow:ClearAllPoints()
+        frame.arrow:SetPoint("RIGHT", -8, 0)
+        frame.arrow:SetVertexColor(0.7, 0.7, 0.7, 1)
+    end
+
+    -- Explicit extents keep pooled full-row art out of content measurement.
+    local textRight = frame.arrow and 28 or 10
+    return textLeft + math.ceil(fontString:GetUnboundedStringWidth()) + textRight, MENU_ROW_HEIGHT
+end
+
+local function StyleMenuDescription(description)
+    for _, element in description:EnumerateElementDescriptions() do
+        element:AddInitializer(StyleMenuElement)
+        StyleMenuDescription(element)
+    end
+end
+
+function UI.CreateDropdown(parent)
+    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+    dropdown.Background:Hide()
+    dropdown.Arrow:Hide()
+    dropdown.Text:SetFontObject("CDM_Font12")
+    dropdown.Text:ClearAllPoints()
+    dropdown.Text:SetPoint("LEFT", 10, 0)
+    dropdown.Text:SetPoint("RIGHT", -28, 0)
+    dropdown.Text:SetHeight(16)
+
+    local background, borders = CreateControlSurface(dropdown)
+    local left, right = CreateChevron(dropdown, "CENTER", dropdown, "RIGHT", -14, 0)
+
+    local function UpdateStyle()
+        local enabled = dropdown:IsEnabled()
+        local active = enabled and (dropdown:IsOver() or dropdown:IsMenuOpen())
+        background:SetColorTexture(0.045, 0.045, 0.05, enabled and 0.96 or 0.5)
+        if active then
+            SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, 0.55)
+        else
+            SetControlBorder(borders, 0.25, 0.25, 0.28, enabled and 1 or 0.45)
+        end
+        local c = enabled and 0.75 or 0.35
+        left:SetColorTexture(c, c, c, 1)
+        right:SetColorTexture(c, c, c, 1)
+    end
+
+    -- Keep the intrinsic dropdown's selection, refresh and submenu behavior.
+    dropdown.menuMixin = ConfigMenuStyle
+    local setupMenu = dropdown.SetupMenu
+    function dropdown:SetupMenu(generator)
+        setupMenu(self, function(owner, rootDescription)
+            generator(owner, rootDescription)
+            StyleMenuDescription(rootDescription)
+        end)
+    end
+    hooksecurefunc(dropdown, "OnButtonStateChanged", UpdateStyle)
+    dropdown:RegisterCallback(DropdownButtonMixin.Event.OnMenuOpen, UpdateStyle)
+    dropdown:RegisterCallback(DropdownButtonMixin.Event.OnMenuClose, UpdateStyle)
+    dropdown:HookScript("OnHide", function(self) self:CloseMenu() end)
+    UpdateStyle()
+    return dropdown
+end
+
+local function StyleSliderWithSteppers(control)
+    local slider = control.Slider
+    slider.Left:Hide()
+    slider.Middle:Hide()
+    slider.Right:Hide()
+    slider.Thumb:SetTexture(CDM_C.TEX_WHITE8X8)
+    slider.Thumb:SetSize(8, 14)
+    slider.Thumb:SetDrawLayer("OVERLAY")
+
+    local track = slider:CreateTexture(nil, "BACKGROUND")
+    track:SetColorTexture(0.22, 0.22, 0.24, 1)
+    track:SetHeight(3)
+    track:SetPoint("LEFT", 0, 0)
+    track:SetPoint("RIGHT", 0, 0)
+
+    local fill = slider:CreateTexture(nil, "ARTWORK")
+    fill:SetHeight(3)
+    fill:SetPoint("LEFT", track, "LEFT")
+
+    local function UpdateFill()
+        local minValue, maxValue = slider:GetMinMaxValues()
+        local ratio = maxValue > minValue and (slider:GetValue() - minValue) / (maxValue - minValue) or 0
+        ratio = math.max(0, math.min(1, ratio))
+        fill:SetWidth(math.max(1, track:GetWidth() * ratio))
+        fill:SetShown(ratio > 0)
+        local enabled = control:IsSliderEnabled()
+        fill:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, enabled and 0.65 or 0.2)
+        local c = enabled and 0.9 or 0.4
+        slider.Thumb:SetVertexColor(c, c, c, 1)
+    end
+
+    for _, info in ipairs({ { control.Back, "-" }, { control.Forward, "+" } }) do
+        local button, text = info[1], info[2]
+        for _, region in ipairs({ button:GetRegions() }) do region:Hide() end
+        button:SetSize(16, 20)
+        local label = button:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+        label:SetPoint("CENTER")
+        label:SetText(text)
+        label:SetTextColor(0.65, 0.65, 0.65, 1)
+        button:HookScript("OnEnter", function()
+            if button:IsEnabled() then label:SetTextColor(GOLD.r, GOLD.g, GOLD.b, 1) end
+        end)
+        button:HookScript("OnLeave", function() label:SetTextColor(0.65, 0.65, 0.65, 1) end)
+    end
+
+    slider:HookScript("OnValueChanged", UpdateFill)
+    slider:HookScript("OnSizeChanged", UpdateFill)
+    slider:HookScript("OnShow", UpdateFill)
+    hooksecurefunc(control, "SetEnabled", UpdateFill)
+    UpdateFill()
+end
+
+local function StyleSliderInput(input)
+    local background, borders = CreateControlSurface(input)
+    background:SetColorTexture(0.025, 0.025, 0.03, 0.9)
+    SetControlBorder(borders, 0.22, 0.22, 0.25, 1)
+    input:HookScript("OnEditFocusGained", function()
+        SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, 0.65)
+    end)
+    input:HookScript("OnEditFocusLost", function()
+        SetControlBorder(borders, 0.22, 0.22, 0.25, 1)
+    end)
+end
+
+function UI.CreateConfigWindow(parent, name)
+    local frame = CreateFrame("Frame", name, parent, "BackdropTemplate")
+    frame:SetBackdrop({
+        bgFile = CDM_C.TEX_WHITE8X8,
+        edgeFile = CDM_C.TEX_WHITE8X8,
+        edgeSize = 1,
+    })
+    frame:SetBackdropColor(0.035, 0.035, 0.04, 0.96)
+    frame:SetBackdropBorderColor(0.3, 0.3, 0.32, 1)
+
+    local closeButton = CreateFrame("Button", nil, frame)
+    closeButton:SetSize(24, 24)
+    closeButton:SetPoint("TOPRIGHT", -8, -8)
+    closeButton:SetFrameLevel(frame:GetFrameLevel() + 20)
+
+    local closeText = closeButton:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+    closeText:SetPoint("CENTER")
+    closeText:SetText("X")
+    closeText:SetTextColor(0.75, 0.75, 0.75, 1)
+
+    closeButton:SetScript("OnClick", function() frame:Hide() end)
+    closeButton:SetScript("OnEnter", function(self)
+        closeText:SetTextColor(GOLD.r, GOLD.g, GOLD.b, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Close"])
+        GameTooltip:Show()
+    end)
+    closeButton:SetScript("OnLeave", function()
+        closeText:SetTextColor(0.75, 0.75, 0.75, 1)
+        GameTooltip:Hide()
+    end)
+    closeButton:SetScript("OnHide", function() GameTooltip:Hide() end)
+    frame.CloseButton = closeButton
+    return frame
+end
 
 function UI.CreateTextButton(parent)
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonGrayTemplate")
-    button:SetNormalFontObject(CDM_GameFontNormal)
-    button:SetHighlightFontObject(CDM_GameFontHighlight)
-    button:SetDisabledFontObject(CDM_GameFontDisable)
-    button:GetNormalTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
-    button:GetPushedTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
-    button:GetDisabledTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
+    local button = CreateFrame("Button", nil, parent)
+    local text = button:CreateFontString(nil, "OVERLAY", "CDM_Font12")
+    text:SetPoint("LEFT", 6, 0)
+    text:SetPoint("RIGHT", -6, 0)
+    text:SetJustifyH("CENTER")
+    text:SetWordWrap(false)
+    button:SetFontString(text)
+    local background, borders = CreateControlSurface(button)
+    local pressed, hovered = false, false
+
+    local function UpdateStyle()
+        if not button:IsEnabled() then
+            background:SetColorTexture(0.035, 0.035, 0.04, 0.5)
+            SetControlBorder(borders, 0.15, 0.15, 0.17, 1)
+            text:SetTextColor(0.35, 0.35, 0.35, 1)
+        elseif pressed then
+            background:SetColorTexture(0.13, 0.12, 0.075, 0.95)
+            SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, 0.7)
+            text:SetTextColor(1, 1, 1, 1)
+        elseif hovered then
+            background:SetColorTexture(0.095, 0.095, 0.105, 0.95)
+            SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, 0.45)
+            text:SetTextColor(1, 1, 1, 1)
+        else
+            background:SetColorTexture(0.05, 0.05, 0.055, 0.95)
+            SetControlBorder(borders, 0.25, 0.25, 0.28, 1)
+            text:SetTextColor(0.85, 0.85, 0.85, 1)
+        end
+    end
+
+    button:HookScript("OnEnter", function() hovered = true; UpdateStyle() end)
+    button:HookScript("OnLeave", function() hovered = false; pressed = false; UpdateStyle() end)
+    button:HookScript("OnMouseDown", function() pressed = true; UpdateStyle() end)
+    button:HookScript("OnMouseUp", function() pressed = false; UpdateStyle() end)
+    button:HookScript("OnDisable", function() pressed = false; UpdateStyle() end)
+    button:HookScript("OnEnable", UpdateStyle)
+    button:HookScript("OnHide", function() hovered = false; pressed = false; UpdateStyle() end)
+    UpdateStyle()
     return button
 end
 
@@ -206,6 +523,7 @@ function UI.CreateModernSlider(parent, label, minVal, maxVal, currentVal, onValu
         [MinimalSliderWithSteppersMixin.Label.Top] = nil,
         [MinimalSliderWithSteppersMixin.Label.Right] = nil
     })
+    StyleSliderWithSteppers(panel.Slider)
 
     local eb = CreateFrame("EditBox", nil, panel)
     eb:SetSize(50, 18)
@@ -214,6 +532,7 @@ function UI.CreateModernSlider(parent, label, minVal, maxVal, currentVal, onValu
     eb:SetJustifyH("CENTER")
     eb:SetTextInsets(0, 0, 0, 0)
     eb:SetAutoFocus(false)
+    StyleSliderInput(eb)
     panel.Input = eb
     local suppressOnValueChanged = false
 
@@ -331,6 +650,7 @@ function UI.CreateModernSliderPrecise(parent, label, minVal, maxVal, currentVal,
         [MinimalSliderWithSteppersMixin.Label.Top] = nil,
         [MinimalSliderWithSteppersMixin.Label.Right] = nil
     })
+    StyleSliderWithSteppers(panel.Slider)
 
     local eb = CreateFrame("EditBox", nil, panel)
     eb:SetSize(50, 18)
@@ -339,6 +659,7 @@ function UI.CreateModernSliderPrecise(parent, label, minVal, maxVal, currentVal,
     eb:SetJustifyH("CENTER")
     eb:SetTextInsets(0, 0, 0, 0)
     eb:SetAutoFocus(false)
+    StyleSliderInput(eb)
     panel.Input = eb
     local suppressOnValueChanged = false
 
@@ -723,17 +1044,12 @@ function UI.CreateModalOverlay()
     overlayBg:SetAllPoints()
     overlayBg:SetColorTexture(0, 0, 0, 0.4)
 
-    local window = CreateFrame("Frame", nil, overlay, "SettingsFrameTemplate")
+    local window = UI.CreateConfigWindow(overlay)
     window:EnableMouse(true)
     window:SetFrameStrata("DIALOG")
     window:SetFrameLevel(overlay:GetFrameLevel() + 5)
     window:SetPoint("CENTER", ns.ConfigFrame, "CENTER")
     window:SetScript("OnMouseDown", function() end)
-
-    if window.TitleText then
-        window.TitleText:SetText("")
-        window.TitleText:Hide()
-    end
 
     local closeButton = window.CloseButton
     if closeButton then
@@ -996,27 +1312,29 @@ function UI.CreateSubTabBar(parent, tabs, initialTab)
     local tabButtons = {}
     local selectedTab = nil
 
+    local function UpdateTabStyle(button, active)
+        button.selected = active
+        button.Underline:SetShown(active)
+        if active then
+            button.Background:SetColorTexture(1, 1, 1, 0.045)
+            button.label:SetTextColor(1, 1, 1, 1)
+        else
+            button.Background:SetColorTexture(1, 1, 1, 0)
+            button.label:SetTextColor(0.65, 0.65, 0.65, 1)
+        end
+    end
+
     local function SelectTab(id)
         if selectedTab == id then return end
+        UI.CloseAllDropdownMenus()
         selectedTab = id
         for _, info in ipairs(tabs) do
             local btn = tabButtons[info.id]
             local pg = subPages[info.id]
+            UpdateTabStyle(btn, info.id == id)
             if info.id == id then
-                btn.Left:SetAtlas("Options_Tab_Active_Left", true)
-                btn.Middle:SetAtlas("Options_Tab_Active_Middle")
-                btn.Right:SetAtlas("Options_Tab_Active_Right", true)
-                btn.label:ClearAllPoints()
-                btn.label:SetPoint("BOTTOM", 0, 6)
-                btn.label:SetFontObject("CDM_GameFontHighlightSmall")
                 pg:Show()
             else
-                btn.Left:SetAtlas("Options_Tab_Left", true)
-                btn.Middle:SetAtlas("Options_Tab_Middle")
-                btn.Right:SetAtlas("Options_Tab_Right", true)
-                btn.label:ClearAllPoints()
-                btn.label:SetPoint("BOTTOM", 0, 4)
-                btn.label:SetFontObject("CDM_GameFontNormalSmall")
                 pg:Hide()
             end
         end
@@ -1025,40 +1343,39 @@ function UI.CreateSubTabBar(parent, tabs, initialTab)
     local prevBtn
     for _, info in ipairs(tabs) do
         local btn = CreateFrame("Button", nil, barFrame)
-        btn:SetHeight(TAB_HEIGHT)
+        btn:SetHeight(TAB_HEIGHT - 4)
 
-        local left = btn:CreateTexture(nil, "BACKGROUND")
-        left:SetAtlas("Options_Tab_Left", true)
-        left:SetPoint("BOTTOMLEFT")
-        btn.Left = left
+        btn.Background = btn:CreateTexture(nil, "BACKGROUND")
+        btn.Background:SetAllPoints()
+        btn.Underline = btn:CreateTexture(nil, "ARTWORK")
+        btn.Underline:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 0.8)
+        btn.Underline:SetHeight(2)
+        btn.Underline:SetPoint("BOTTOMLEFT", 8, 0)
+        btn.Underline:SetPoint("BOTTOMRIGHT", -8, 0)
 
-        local right = btn:CreateTexture(nil, "BACKGROUND")
-        right:SetAtlas("Options_Tab_Right", true)
-        right:SetPoint("BOTTOMRIGHT")
-        btn.Right = right
-
-        local middle = btn:CreateTexture(nil, "BACKGROUND")
-        middle:SetAtlas("Options_Tab_Middle")
-        middle:SetPoint("TOPLEFT", left, "TOPRIGHT")
-        middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
-        btn.Middle = middle
-
-        local label = btn:CreateFontString(nil, "OVERLAY", "CDM_GameFontNormalSmall")
-        label:SetPoint("BOTTOM", 0, 4)
+        local label = btn:CreateFontString(nil, "OVERLAY", "CDM_Font12")
+        label:SetPoint("CENTER", 0, 1)
         label:SetText(info.label)
         btn.label = label
 
         local textWidth = label:GetStringWidth()
-        btn:SetWidth(math.max(textWidth + 40, 80))
+        btn:SetWidth(math.max(textWidth + 28, 80))
 
         if prevBtn then
-            btn:SetPoint("BOTTOMLEFT", prevBtn, "BOTTOMRIGHT", 2, 0)
+            btn:SetPoint("BOTTOMLEFT", prevBtn, "BOTTOMRIGHT", 4, 0)
         else
             btn:SetPoint("BOTTOMLEFT", barFrame, "BOTTOMLEFT", 0, 0)
         end
         prevBtn = btn
 
         btn:SetScript("OnClick", function() SelectTab(info.id) end)
+        btn:SetScript("OnEnter", function(self)
+            if not self.selected then
+                self.Background:SetColorTexture(1, 1, 1, 0.025)
+                self.label:SetTextColor(0.9, 0.9, 0.9, 1)
+            end
+        end)
+        btn:SetScript("OnLeave", function(self) UpdateTabStyle(self, self.selected) end)
         tabButtons[info.id] = btn
 
         local pg = CreateFrame("Frame", nil, parent)

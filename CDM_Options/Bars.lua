@@ -298,7 +298,7 @@ local function CreateBarsTab(page)
 
     local function MakeDropdown(parent)
         return RegisterPanelDropdown(
-            CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate"))
+            UI.CreateDropdown(parent))
     end
 
     -- Column helper.
@@ -567,7 +567,7 @@ local function CreateBarsTab(page)
         local tabPages = subTabs.subPages
 
         local divider = tabHost:CreateTexture(nil, "ARTWORK")
-        divider:SetAtlas("Options_HorizontalDivider", true)
+        UI.StyleDivider(divider)
         divider:SetPoint("TOPLEFT", subTabs.barFrame, "BOTTOMLEFT", -30, 0)
         divider:SetPoint("TOPRIGHT", subTabs.barFrame, "BOTTOMRIGHT", 30, 0)
         local dividerH = divider:GetHeight()

@@ -48,7 +48,7 @@ StaticPopupDialogs["CDM_CONFIRM_DELETE_GROUP"] = {
 
 local function CreateBuffGroupsPanel(page, tabPage)
     local divider = page:CreateTexture(nil, "ARTWORK")
-    divider:SetAtlas("Options_HorizontalDivider", true)
+    UI.StyleDivider(divider)
     divider:SetPoint("TOP", page, "TOP", 0, 0)
 
     local si = GetSpecialization()
@@ -717,7 +717,7 @@ local function CreateBuffGroupsPanel(page, tabPage)
 
             if soundOnShowEnabled then
                 local showDropdown = registerDropdown(
-                    CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+                    UI.CreateDropdown(rc)
                 )
                 showDropdown:SetWidth(220)
                 showDropdown:SetPoint("TOPLEFT", 26, yOff)
@@ -757,7 +757,7 @@ local function CreateBuffGroupsPanel(page, tabPage)
 
             if soundOnHideEnabled then
                 local hideDropdown = registerDropdown(
-                    CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
+                    UI.CreateDropdown(rc)
                 )
                 hideDropdown:SetWidth(220)
                 hideDropdown:SetPoint("TOPLEFT", 26, yOff)
@@ -1041,7 +1041,7 @@ local function CreateBuffGroupsPanel(page, tabPage)
                 colorAlpha = false,
                 save = save,
                 onToggle = refresh,
-                createDropdown = function(p) return registerDropdown(CreateFrame("DropdownButton", nil, p, "WowStyle1DropdownTemplate")) end,
+                createDropdown = function(p) return registerDropdown(UI.CreateDropdown(p)) end,
             })
         end
 
@@ -1175,7 +1175,7 @@ local function CreateBuffGroupsPanel(page, tabPage)
                     { value = "eq", label = L["=="] }, { value = "gte", label = L[">="] },
                     { value = "gt", label = L[">"] },
                 }
-                local operatorDropdown = RegisterRightPanelDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+                local operatorDropdown = RegisterRightPanelDropdown(UI.CreateDropdown(rc))
                 operatorDropdown:SetWidth(75)
                 operatorDropdown:SetPoint("LEFT", conditionLabel, "RIGHT", 8, 0)
                 for _, option in ipairs(operators) do
@@ -2409,7 +2409,7 @@ local function CreateBuffGroupsTab(page)
 
     local generalPage = tabBar.subPages.general
     local divider = generalPage:CreateTexture(nil, "ARTWORK")
-    divider:SetAtlas("Options_HorizontalDivider", true)
+    UI.StyleDivider(divider)
     divider:SetPoint("TOP", generalPage, "TOP", 0, 0)
 
     local content = UI.CreateScrollableTab(generalPage, "CDM_BuffGeneralScrollFrame", 180)
