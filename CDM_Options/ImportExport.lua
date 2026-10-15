@@ -712,9 +712,137 @@ local function ShowBlizzardTrackingNotice(prepared, statusFont, importMessage)
     return true
 end
 
-local function CreateImportExportTab(page, tabId)
+StaticPopupDialogs["CDM_CONFIRM_IMPORT_ALL_AYIJE_PROFILES"] = {
+    text = L["Import all AyijeCDM profiles? This may add many profiles."],
+    button1 = L["Import"],
+    button2 = L["Cancel"],
+    OnAccept = function(self, data)
+        if data and data.onAccept then data.onAccept() end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local function CreateImportExportTab(page)
+    local importHeader = UI.CreateHeader(page, L["Import Profile"])
+    importHeader:SetPoint("TOPLEFT", 35, -15)
+
+    local importDesc = page:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    importDesc:SetPoint("TOPLEFT", importHeader, "BOTTOMLEFT", 0, -15)
+    importDesc:SetText(L["Paste an export string to import a profile."])
+    UI.SetTextMuted(importDesc)
+
+    local supportedLabel = page:CreateFontString(nil, "ARTWORK", "CDM_Font12")
+    supportedLabel:SetPoint("TOPLEFT", importDesc, "BOTTOMLEFT", 0, -4)
+    supportedLabel:SetText(L["Supports CDM, AyijeCDM and SkironCDM export strings."])
+    UI.SetTextMuted(supportedLabel)
+
+    local importBtn = UI.CreateTextButton(page)
+    importBtn:SetSize(120, 26)
+    importBtn:SetPoint("TOPLEFT", supportedLabel, "BOTTOMLEFT", 0, -16)
+    importBtn:SetText(L["Import"])
+
+    local ayijeBtn = UI.CreateTextButton(page)
+    ayijeBtn:SetSize(190, 26)
+    ayijeBtn:SetPoint("TOPLEFT", importBtn, "BOTTOMLEFT", 0, -14)
+    ayijeBtn:SetText(L["Import all Ayije profiles"])
+
+    local ayijeHint = page:CreateFontString(nil, "ARTWORK", "CDM_Font12")
+    ayijeHint:SetPoint("LEFT", ayijeBtn, "RIGHT", 10, 0)
+    ayijeHint:SetWidth(280)
+    ayijeHint:SetJustifyH("LEFT")
+    ayijeHint:SetWordWrap(true)
+    ayijeHint:SetText(L["Requires AyijeCDM to be enabled and reloaded."])
+    UI.SetTextMuted(ayijeHint)
+
+    local collectionHint = page:CreateFontString(nil, "ARTWORK", "CDM_Font12")
+    collectionHint:SetPoint("TOPLEFT", ayijeBtn, "BOTTOMLEFT", 0, -9)
+    collectionHint:SetWidth(520)
+    collectionHint:SetJustifyH("LEFT")
+    collectionHint:SetWordWrap(true)
+    collectionHint:SetText(L["All-profile transfers include character/spec assignments. Existing profiles are kept; imported names receive a suffix if needed."])
+    UI.SetTextMuted(collectionHint)
+
+    local importStatus = page:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    importStatus:SetPoint("TOPLEFT", collectionHint, "BOTTOMLEFT", 0, -8)
+    importStatus:SetWidth(520)
+    importStatus:SetJustifyH("LEFT")
+    importStatus:SetWordWrap(true)
+    activeStatusFontString = importStatus
+    ApplyImportStatus(importStatus)
+
+    local function ShowImportResult(success, message, prepared)
+        SetImportStatus(importStatus, success, message)
+        if not success then return end
+        local showingTracking = ShowBlizzardTrackingNotice(prepared, importStatus, message)
+        if not showingTracking and (prepared.sourceAddon == "Ayije_CDM" or prepared.sourceAddon == "SkironCooldownManager") then
+            ShowExternalImportNotice()
+        end
+    end
+
+    local importPopup
+    importBtn:SetScript("OnClick", function()
+        if not importPopup then
+            local popup = UI.CreateModalOverlay()
+            local window = popup.window
+            window:SetSize(500, 240)
+
+            local title = UI.CreateHeader(window, L["Import Profile"])
+            title:ClearAllPoints()
+            title:SetPoint("TOPLEFT", 18, -42)
+
+            local boxFrame, editBox = UI.CreateScrollableEditBox(window, 464, 100, 420)
+            boxFrame:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -14)
+
+            local errorText = window:CreateFontString(nil, "ARTWORK", "CDM_Font12")
+            errorText:SetPoint("TOPLEFT", boxFrame, "BOTTOMLEFT", 0, -6)
+            errorText:SetWidth(464)
+            errorText:SetJustifyH("LEFT")
+            errorText:SetWordWrap(true)
+
+            local confirm = UI.CreateTextButton(window)
+            confirm:SetSize(90, 26)
+            confirm:SetPoint("BOTTOMRIGHT", -116, 18)
+            confirm:SetText(L["Import"])
+            confirm:SetScript("OnClick", function()
+                local prepared, err = API:PrepareProfileImport(editBox:GetText())
+                if not prepared then
+                    errorText:SetText(err)
+                    UI.SetTextError(errorText)
+                    return
+                end
+                popup:Hide()
+                local success, message, applied = ApplyPreparedImport(prepared)
+                ShowImportResult(success, message, applied)
+            end)
+
+            local cancel = UI.CreateTextButton(window)
+            cancel:SetSize(90, 26)
+            cancel:SetPoint("BOTTOMRIGHT", -18, 18)
+            cancel:SetText(L["Cancel"])
+            cancel:SetScript("OnClick", function() popup:Hide() end)
+
+            popup:HookScript("OnHide", function() editBox:ClearFocus() end)
+            importPopup = { overlay = popup, editBox = editBox, errorText = errorText }
+        end
+        importPopup.editBox:SetText("")
+        importPopup.errorText:SetText("")
+        importPopup.overlay:Show()
+        importPopup.editBox:SetFocus()
+    end)
+
+    ayijeBtn:SetScript("OnClick", function()
+        StaticPopup_Show("CDM_CONFIRM_IMPORT_ALL_AYIJE_PROFILES", nil, nil, {
+            onAccept = function()
+                ShowImportResult(API:ImportAllAyijeProfiles())
+            end,
+        })
+    end)
+
     local exportHeader = UI.CreateHeader(page, L["Export Profile"])
-    exportHeader:SetPoint("TOPLEFT", 35, -40)
+    exportHeader:SetPoint("TOPLEFT", importStatus, "BOTTOMLEFT", 0, -30)
 
     local exportDesc = page:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     exportDesc:SetPoint("TOPLEFT", exportHeader, "BOTTOMLEFT", 0, -15)
@@ -760,13 +888,39 @@ local function CreateImportExportTab(page, tabId)
     exportBtn:SetPoint("TOPLEFT", exportDesc, "BOTTOMLEFT", 0, exportBtnYOffset)
     exportBtn:SetText(L["Export"])
 
-    local exportBoxLabel = page:CreateFontString(nil, "ARTWORK", "CDM_Font14")
-    exportBoxLabel:SetPoint("TOPLEFT", exportBtn, "BOTTOMLEFT", 0, -16)
-    exportBoxLabel:SetText(L["Export String (Ctrl+C to copy):"])
-    UI.SetTextMuted(exportBoxLabel)
+    local exportPopup
+    local function ShowExportString(exportString)
+        if not exportPopup then
+            local popup = UI.CreateModalOverlay()
+            local window = popup.window
+            window:SetSize(500, 240)
 
-    local exportBoxFrame, exportEditBox = UI.CreateScrollableEditBox(page, 420, 80, 380)
-    exportBoxFrame:SetPoint("TOPLEFT", exportBoxLabel, "BOTTOMLEFT", 0, -4)
+            local title = UI.CreateHeader(window, L["Export Profile"])
+            title:ClearAllPoints()
+            title:SetPoint("TOPLEFT", 18, -42)
+
+            local hint = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+            hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+            hint:SetText(L["Export String (Ctrl+C to copy):"])
+            UI.SetTextMuted(hint)
+
+            local boxFrame, editBox = UI.CreateScrollableEditBox(window, 464, 80, 420)
+            boxFrame:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -8)
+
+            local close = UI.CreateTextButton(window)
+            close:SetSize(90, 26)
+            close:SetPoint("BOTTOMRIGHT", -18, 18)
+            close:SetText(L["Close"])
+            close:SetScript("OnClick", function() popup:Hide() end)
+
+            popup:HookScript("OnHide", function() editBox:ClearFocus() end)
+            exportPopup = { overlay = popup, editBox = editBox }
+        end
+        exportPopup.editBox:SetText(exportString)
+        exportPopup.overlay:Show()
+        exportPopup.editBox:HighlightText()
+        exportPopup.editBox:SetFocus()
+    end
 
     exportBtn:SetScript("OnClick", function()
         local selectedCategories = {}
@@ -778,12 +932,8 @@ local function CreateImportExportTab(page, tabId)
 
         local exportString = API:ExportProfile(selectedCategories)
         if exportString then
-            exportEditBox:SetText(exportString)
-            exportEditBox:HighlightText()
-            exportEditBox:SetFocus()
-            print("|cff00ff00[CDM]|r " .. L["Profile exported! Copy the string above."])
+            ShowExportString(exportString)
         else
-            exportEditBox:SetText("")
             print("|cffff0000[CDM]|r " .. L["Export failed."])
         end
     end)
@@ -794,86 +944,9 @@ local function CreateImportExportTab(page, tabId)
     exportAllBtn:SetText(L["Export all profiles"])
     exportAllBtn:SetScript("OnClick", function()
         local exported, err = API:ExportAllProfiles()
-        exportEditBox:SetText(exported or "")
-        if exported then
-            exportEditBox:HighlightText()
-            exportEditBox:SetFocus()
+        if exported then ShowExportString(exported)
         else print("|cffff0000[CDM]|r " .. (err or L["Export failed."])) end
     end)
-
-    local importHeader = UI.CreateHeader(page, L["Import Profile"], exportBoxFrame, -15)
-
-    local importDesc = page:CreateFontString(nil, "ARTWORK", "CDM_Font14")
-    importDesc:SetPoint("TOPLEFT", importHeader, "BOTTOMLEFT", 0, -15)
-    importDesc:SetText(L["Paste an export string below and click Import."])
-    UI.SetTextMuted(importDesc)
-
-    local supportedLabel = page:CreateFontString(nil, "ARTWORK", "CDM_Font12")
-    supportedLabel:SetPoint("TOPLEFT", importDesc, "BOTTOMLEFT", 0, -4)
-    supportedLabel:SetText(L["Supports CDM, AyijeCDM and SkironCDM export strings."])
-    UI.SetTextMuted(supportedLabel)
-
-    local importBoxFrame, importEditBox = UI.CreateScrollableEditBox(page, 420, 80, 380)
-    importBoxFrame:SetPoint("TOPLEFT", supportedLabel, "BOTTOMLEFT", 0, -8)
-
-    local importBtn = UI.CreateTextButton(page)
-    importBtn:SetSize(120, 26)
-    importBtn:SetPoint("TOPLEFT", importBoxFrame, "BOTTOMLEFT", 0, -6)
-    importBtn:SetText(L["Import"])
-
-    local importStatus = page:CreateFontString(nil, "ARTWORK", "CDM_Font14")
-    importStatus:SetPoint("LEFT", importBtn, "RIGHT", 12, 0)
-    importStatus:SetText("")
-    UI.SetTextMuted(importStatus)
-    activeStatusFontString = importStatus
-    ApplyImportStatus(importStatus)
-
-    local function ImportString(importString)
-        local success, message, prepared = API:ImportProfile(importString)
-        SetImportStatus(importStatus, success, message)
-        if success then
-            local showingTracking = ShowBlizzardTrackingNotice(prepared, importStatus, message)
-            if not showingTracking and (prepared.sourceAddon == "Ayije_CDM" or prepared.sourceAddon == "SkironCooldownManager") then
-                ShowExternalImportNotice()
-            end
-        end
-    end
-    importBtn:SetScript("OnClick", function()
-        ImportString(importEditBox:GetText())
-    end)
-
-    local clearBtn = UI.CreateTextButton(page)
-    clearBtn:SetSize(80, 26)
-    clearBtn:SetPoint("LEFT", importBtn, "RIGHT", 8, 0)
-    clearBtn:SetText(L["Clear"])
-    clearBtn:SetScript("OnClick", function()
-        importEditBox:SetText("")
-        ClearImportStatus(importStatus)
-    end)
-
-    local ayijeBtn = UI.CreateTextButton(page)
-    ayijeBtn:SetSize(190, 26)
-    ayijeBtn:SetPoint("LEFT", clearBtn, "RIGHT", 8, 0)
-    ayijeBtn:SetText(L["Import all Ayije profiles"])
-    ayijeBtn:SetScript("OnClick", function()
-        local success, message, prepared = API:ImportAllAyijeProfiles()
-        SetImportStatus(importStatus, success, message)
-        if success and not ShowBlizzardTrackingNotice(prepared, importStatus, message) then ShowExternalImportNotice() end
-    end)
-
-    local collectionHint = page:CreateFontString(nil, "ARTWORK", "CDM_Font12")
-    collectionHint:SetPoint("TOPLEFT", importStatus, "BOTTOMLEFT", 0, -8)
-    collectionHint:SetWidth(600)
-    collectionHint:SetJustifyH("LEFT")
-    collectionHint:SetWordWrap(true)
-    collectionHint:SetText(L["All-profile transfers include character/spec assignments. Existing profiles are kept; imported names receive a suffix if needed."])
-    UI.SetTextMuted(collectionHint)
-
-    importStatus:ClearAllPoints()
-    importStatus:SetPoint("TOPLEFT", importBtn, "BOTTOMLEFT", 0, -6)
-    importStatus:SetWidth(600)
-    importStatus:SetJustifyH("LEFT")
-    importStatus:SetWordWrap(true)
 end
 
-API:RegisterConfigTab("importexport", L["Import/Export"], CreateImportExportTab, 12)
+ns.CreateImportExportTab = CreateImportExportTab

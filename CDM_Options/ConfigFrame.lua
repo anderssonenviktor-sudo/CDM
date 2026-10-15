@@ -72,6 +72,7 @@ local function HideConfigPopups()
     StaticPopup_Hide("CDM_CONFIRM_RESET_PROFILE")
     StaticPopup_Hide("CDM_CONFIRM_COPY_PROFILE")
     StaticPopup_Hide("CDM_CONFIRM_DELETE_PROFILE")
+    StaticPopup_Hide("CDM_CONFIRM_IMPORT_ALL_AYIJE_PROFILES")
     StaticPopup_Hide("CDM_CONFIRM_DELETE_GROUP")
     StaticPopup_Hide("CDM_CONFIRM_DELETE_CD_GROUP")
 end
@@ -168,7 +169,7 @@ ns.ConfigCreatePage = CreateCategoryPage
 
 local categoryHeaders = {
     { tabs = {"layout", "buffgroups", "bars", "glow", "castbar", "resources", "border"} },
-    { divider = true, tabs = {"profiles", "importexport"} },
+    { divider = true, tabs = {"profiles"} },
 }
 
 local function CreateConfigFrame()
@@ -443,7 +444,10 @@ function API:ShowConfig(targetTab)
 
     -- Jumping to a tab does not need the full teardown/rebuild that
     -- RebuildConfigFrame does; that is only for discarding stale state.
-    if targetTab and ns.ConfigTabs and ns.ConfigTabs[targetTab] then
+    if targetTab == "importexport" then
+        SelectCategory("profiles")
+        if ns.SelectProfilesSubTab then ns.SelectProfilesSubTab("importexport") end
+    elseif targetTab and ns.ConfigTabs and ns.ConfigTabs[targetTab] then
         SelectCategory(targetTab)
     end
 end
@@ -475,15 +479,19 @@ function API:RebuildConfigFrame(targetTab)
         ns.ConfigFrame = nil
         ns.ConfigContent = nil
         ns.ConfigSidebar = nil
+        ns.SelectProfilesSubTab = nil
     end
     CreateConfigFrame()
     ConfigFrame:Show()
 
-    local tabToSelect = targetTab or "profiles"
+    local tabToSelect = targetTab == "importexport" and "profiles" or (targetTab or "profiles")
     if not (ns.ConfigTabs and ns.ConfigTabs[tabToSelect]) then
         tabToSelect = "profiles"
     end
     if ns.ConfigTabs and ns.ConfigTabs[tabToSelect] then
         SelectCategory(tabToSelect)
+        if targetTab == "importexport" and ns.SelectProfilesSubTab then
+            ns.SelectProfilesSubTab("importexport")
+        end
     end
 end

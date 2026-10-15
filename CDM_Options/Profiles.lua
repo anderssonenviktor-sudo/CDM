@@ -168,11 +168,11 @@ end
 
 ns.RefreshProfilesTab = RefreshProfilesUI
 
-local function CreateProfilesTab(page, tabId)
+local function CreateProfileManagementTab(page)
     profilePage = page
 
     local h2 = UI.CreateHeader(page, L["Current Profile"])
-    h2:SetPoint("TOPLEFT", 35, -40)
+    h2:SetPoint("TOPLEFT", 35, -15)
 
     switchDropdown = UI.CreateDropdown(page)
     switchDropdown:SetPoint("TOPLEFT", h2, "BOTTOMLEFT", 0, -15)
@@ -365,6 +365,16 @@ local function CreateProfilesTab(page, tabId)
     if not API:IsSpecProfileEnabled() then
         specSection:Hide()
     end
+end
+
+local function CreateProfilesTab(page)
+    local tabBar = UI.CreateSubTabBar(page, {
+        { id = "manage", label = L["Manage"] },
+        { id = "importexport", label = L["Import/Export"] },
+    }, "manage")
+    ns.SelectProfilesSubTab = tabBar.selectTab
+    CreateProfileManagementTab(tabBar.subPages.manage)
+    ns.CreateImportExportTab(tabBar.subPages.importexport)
 end
 
 API:RegisterConfigTab("profiles", L["Profiles"], CreateProfilesTab, 11.5)
