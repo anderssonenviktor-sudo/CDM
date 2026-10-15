@@ -222,6 +222,7 @@ local function IsRegistrySpecEmpty(node)
     if not IsEmptyTable(node.colors) then return false end
     if node.glowEnabled ~= nil and not IsEmptyTable(node.glowEnabled) then return false end
     if node.glowColors ~= nil and not IsEmptyTable(node.glowColors) then return false end
+    if node.glowTypes ~= nil and not IsEmptyTable(node.glowTypes) then return false end
     if not IsEmptyTable(node.stackGlows) then return false end
     return true
 end
@@ -234,6 +235,7 @@ local function CompactRegistrySpec(specID, profile)
 
     if IsEmptyTable(node.glowEnabled) then node.glowEnabled = nil end
     if IsEmptyTable(node.glowColors) then node.glowColors = nil end
+    if IsEmptyTable(node.glowTypes) then node.glowTypes = nil end
     if IsEmptyTable(node.stackGlows) then node.stackGlows = nil end
 
     if IsRegistrySpecEmpty(node) then
@@ -2358,6 +2360,35 @@ function CDM:SetSpellGlowColor(specID, spellID, color)
     CompactRegistrySpec(specID)
     if self.MarkSpecDataDirty then self:MarkSpecDataDirty() end
     self:Refresh()
+end
+
+local spellGlowTypes = { pixel = true, autocast = true, button = true, proc = true, gcd = true, shape = true }
+
+function CDM:GetSpellGlowType(specID, spellID)
+    local registry = self.db and self.db.spellRegistry
+    local reg = registry and registry[specID]
+    local types = reg and reg.glowTypes
+    if type(types) ~= "table" then return nil end
+    local glowType = types[spellID]
+    if not glowType then
+        local base, stable = ResolveWithVariants(spellID)
+        glowType = (base and types[base]) or (stable and types[stable])
+    end
+    return spellGlowTypes[glowType] and glowType or nil
+end
+
+function CDM:SetSpellGlowType(specID, spellID, glowType)
+    if glowType ~= nil and not spellGlowTypes[glowType] then return end
+    local reg = EnsureRegistryStructure(specID)
+    if not reg then return end
+    reg.glowTypes = reg.glowTypes or {}
+    local base, stable = ResolveWithVariants(spellID)
+    if base then reg.glowTypes[base] = nil end
+    if stable then reg.glowTypes[stable] = nil end
+    reg.glowTypes[spellID] = glowType
+    CompactRegistrySpec(specID)
+    if self.MarkSpecDataDirty then self:MarkSpecDataDirty() end
+    self:Refresh("BUFF_DATA")
 end
 
 CDM.BuffGroupSets = {

@@ -7,14 +7,7 @@ local UI = ns.ConfigUI
 local L = Runtime.L
 
 
-local glowTypeOptions = {
-    { value = "pixel", label = L["Pixel Glow"] },
-    { value = "autocast", label = L["Autocast Glow"] },
-    { value = "button", label = L["Button Glow"] },
-    { value = "proc", label = L["Proc Glow"] },
-    { value = "gcd", label = L["GCD"] },
-    { value = "shape", label = L["Shape Glow"] },
-}
+local glowTypeOptions = UI.GlowTypeOptions
 
 local glowColorOptions = {
     { value = "default", label = L["Default"] },

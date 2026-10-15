@@ -792,9 +792,14 @@ local function CreateCooldownGroupsPanel(subPage, page)
             local glowEnabled = API:GetSpellGlowEnabled(currentSpecID, spellID)
             local glowCheckbox = UI.CreateModernCheckbox(rc, L["Enable Glow"], glowEnabled, function(checked)
                 API:SetSpellGlowEnabled(currentSpecID, spellID, checked or nil)
+                ShowSpellSettings(spellID, groupIndex)
             end)
             glowCheckbox:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 36
+
+            if glowEnabled then
+                yOff = UI.CreateSpellGlowTypeOverride(rc, yOff, currentSpecID, spellID, RegisterRightPanelDropdown)
+            end
 
             local glowColorLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
             glowColorLabel:SetText(L["Glow Color:"])

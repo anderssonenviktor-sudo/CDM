@@ -897,6 +897,15 @@ UI.PositionOptions = {
     "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT",
 }
 
+UI.GlowTypeOptions = {
+    { value = "pixel", label = L["Pixel Glow"] },
+    { value = "autocast", label = L["Autocast Glow"] },
+    { value = "button", label = L["Button Glow"] },
+    { value = "proc", label = L["Proc Glow"] },
+    { value = "gcd", label = L["GCD"] },
+    { value = "shape", label = L["Shape Glow"] },
+}
+
 function UI.SetupValueDropdown(dropdown, options, getValue, setValue)
     dropdown:SetupMenu(function(_, rootDescription)
         local opts = type(options) == "function" and options() or options
@@ -906,6 +915,31 @@ function UI.SetupValueDropdown(dropdown, options, getValue, setValue)
             end)
         end
     end)
+end
+
+function UI.CreateSpellGlowTypeOverride(parent, yOff, specID, spellID, registerDropdown)
+    local label = parent:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+    label:SetText(L["Glow Type"])
+    label:SetPoint("TOPLEFT", 0, yOff)
+
+    local dropdown = UI.CreateDropdown(parent)
+    if registerDropdown then dropdown = registerDropdown(dropdown) end
+    dropdown:SetWidth(170)
+    dropdown:SetPoint("LEFT", label, "RIGHT", 8, 0)
+
+    local options = { { value = nil, label = L["Use Global Glow Type"] } }
+    for _, option in ipairs(UI.GlowTypeOptions) do
+        options[#options + 1] = option
+    end
+    local currentType = API:GetSpellGlowType(specID, spellID)
+    dropdown:SetDefaultText(UI.GetOptionLabel(options, currentType, L["Use Global Glow Type"]))
+    UI.SetupValueDropdown(dropdown, options,
+        function() return API:GetSpellGlowType(specID, spellID) end,
+        function(value, optionLabel)
+            API:SetSpellGlowType(specID, spellID, value)
+            dropdown:SetDefaultText(optionLabel)
+        end)
+    return yOff - 36
 end
 
 function UI.SetupPositionDropdown(dropdown, getValue, setValue, positions)

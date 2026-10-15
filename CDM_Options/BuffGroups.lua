@@ -1144,6 +1144,10 @@ local function CreateBuffGroupsPanel(page, tabPage)
             glowCheckbox:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 36
 
+            if glowEnabled then
+                yOff = UI.CreateSpellGlowTypeOverride(rc, yOff, currentSpecID, spellID, RegisterRightPanelDropdown)
+            end
+
             local glowColorLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
             glowColorLabel:SetText(L["Glow Color:"])
             glowColorLabel:SetPoint("TOPLEFT", 0, yOff)

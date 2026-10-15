@@ -326,13 +326,15 @@ local function AttachStackRegions(state, ...)
     end
 end
 
-local function ShowCustomGlow(frame, overrideColor)
+local function ShowCustomGlow(frame, overrideColor, overrideType)
     if not LCG then return end
 
     local frameData = GetFrameData(frame)
+    local glowType = glowStartFunctions[overrideType] and overrideType or glowCache.type
 
-    if frameData.cdmGlowActive and frameData.cdmGlowType == glowCache.type
+    if frameData.cdmGlowActive and frameData.cdmGlowType == glowType
        and ColorsMatch(frameData.cdmGlowOverrideColor, overrideColor) then
+        frameData.cdmGlowRequestedType = overrideType
         return
     end
 
@@ -352,23 +354,24 @@ local function ShowCustomGlow(frame, overrideColor)
         frame:GetWidth()
     end
 
-    if glowCache.type ~= "button" and frame._ButtonGlow then
+    if glowType ~= "button" and frame._ButtonGlow then
         glowStopFunctions.button(frame, true)
     end
 
-    local fn = glowStartFunctions[glowCache.type]
+    local fn = glowStartFunctions[glowType]
     if fn then
         local frameLevel = frame:GetFrameLevel() + 5
         fn(frame, frameLevel, overrideColor)
         local state = frameData.stackGlow
-        local rendererKey = glowFrameKeys[glowCache.type]
+        local rendererKey = glowFrameKeys[glowType]
         local renderer = rendererKey and frame[rendererKey] or frameData.cdmNativeGlow
         if state and state.threshold and renderer then
             AttachStackRegions(state, renderer:GetRegions())
         end
         frameData.cdmGlowActive = true
-        frameData.cdmGlowType = glowCache.type
+        frameData.cdmGlowType = glowType
         frameData.cdmGlowOverrideColor = overrideColor
+        frameData.cdmGlowRequestedType = overrideType
         activeGlowFrames[frame] = true
         if not rendererKey and not frameData.cdmNativeGlowHideHooked then
             frameData.cdmNativeGlowHideHooked = true
@@ -399,6 +402,7 @@ HideCustomGlow = function(frame)
     frameData.cdmGlowActive = false
     frameData.cdmGlowType = nil
     frameData.cdmGlowOverrideColor = nil
+    frameData.cdmGlowRequestedType = nil
     frameData.cdmSpellAlertGlow = nil
     activeGlowFrames[frame] = nil
 end
@@ -521,6 +525,7 @@ local function EnsureBuffGlowTargetHooks(frame)
         if not IsBuffGlowSourceStillValid(self, frameData.cdmBuffGlowSourceID) then
             frameData.cdmBuffGlowWanted = nil
             frameData.cdmBuffGlowOverrideColor = nil
+            frameData.cdmBuffGlowOverrideType = nil
             frameData.cdmBuffGlowSourceID = nil
             HideCustomGlow(host)
             host:Hide()
@@ -529,7 +534,7 @@ local function EnsureBuffGlowTargetHooks(frame)
 
         SyncBuffGlowHostFrame(self, host)
         host:Show()
-        ShowCustomGlow(host, frameData.cdmBuffGlowOverrideColor)
+        ShowCustomGlow(host, frameData.cdmBuffGlowOverrideColor, frameData.cdmBuffGlowOverrideType)
     end)
 
     frame:HookScript("OnSizeChanged", function(self)
@@ -556,6 +561,8 @@ function Glow:RequestBuffGlow(frame, enabled, overrideColor, sourceID)
 
     frameData.cdmBuffGlowWanted = enabled and true or false
     frameData.cdmBuffGlowOverrideColor = overrideColor
+    frameData.cdmBuffGlowOverrideType = enabled and sourceID and CDM.GetSpellGlowType
+        and CDM:GetSpellGlowType(CDM:GetCurrentSpecID(), sourceID) or nil
     frameData.cdmBuffGlowSourceID = sourceID
 
     EnsureBuffGlowTargetHooks(frame)
@@ -579,7 +586,7 @@ function Glow:RequestBuffGlow(frame, enabled, overrideColor, sourceID)
         SyncBuffGlowHostFrame(frame, host)
         if frame:IsShown() then
             host:Show()
-            ShowCustomGlow(host, overrideColor)
+            ShowCustomGlow(host, overrideColor, frameData.cdmBuffGlowOverrideType)
         end
     else
         local host = frameData.cdmBuffGlowHost
@@ -780,7 +787,7 @@ FeedStackGlow = function(frame)
         if state.operator == "eq" then state.gate2.bar:SetValue(applications) end
     end
     state.host:Show()
-    ShowCustomGlow(state.host, frameData.cdmBuffGlowOverrideColor)
+    ShowCustomGlow(state.host, frameData.cdmBuffGlowOverrideColor, frameData.cdmBuffGlowOverrideType)
 end
 
 local function RefreshStackFrame(frame)
@@ -836,7 +843,7 @@ function Glow:RefreshActiveGlows()
             if stopFn then stopFn(frame, true) end
             frameData.cdmGlowActive = false
             frameData.cdmGlowType = nil
-            ShowCustomGlow(frame, frameData.cdmGlowOverrideColor)
+            ShowCustomGlow(frame, frameData.cdmGlowOverrideColor, frameData.cdmGlowRequestedType)
         else
             activeGlowFrames[frame] = nil
         end
