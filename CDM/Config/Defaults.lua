@@ -255,12 +255,6 @@ CDM.defaults = {
     -- Patch 12.1 tracks trinkets natively, so the custom trinket row stands
     -- down to avoid duplicate icons. Set true to keep using it regardless.
     trinketsForceEnable = false,
-    -- Blizzard's native trinket entries draw the on-use buff duration instead
-    -- of the item cooldown (CheckCacheCooldownValuesFromAura claims the frame
-    -- before CheckCacheCooldownValuesFromEquippedItem can run), so a 17s proc
-    -- masks a 120s cooldown. Set true to always show the real item cooldown.
-    trinketsHideAura = false,
-
     -- Custom cooldown icons in the cooldown viewer: per-spec entries,
     -- customCooldownEntries[specID] = { { id = <spell/item ID>, isItem = bool }, ... }.
     customCooldownEntries = {},
@@ -273,7 +267,7 @@ CDM.defaults = {
 
     -- Player Cast Bar settings
     castBarEnabled = true,
-    hideBlizzardCastBar = false,
+    hideBlizzardCastBar = true,
     castBarWidth = 0,
     castBarAutoWidthSource = "essential",
     castBarHeight = 20,

@@ -413,7 +413,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 40
+local DB_SCHEMA_VERSION = 41
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1486,6 +1486,12 @@ local PROFILE_MIGRATIONS = {
             profile.fadingTrigger = nil
             profile.fadingRacials = nil
             profile.fadingDefensives = nil
+        end,
+    },
+    {
+        version = 41,
+        run = function(profile)
+            profile.trinketsHideAura = nil
         end,
     },
 }

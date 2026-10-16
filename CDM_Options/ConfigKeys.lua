@@ -63,7 +63,6 @@ ns.ConfigKeys = {
                 "chargeHideSwipe",
                 "swipeColor",
                 "hideGCDSwipe",
-                "trinketsHideAura",
                 "desaturateOutOfResources",
             },
         },

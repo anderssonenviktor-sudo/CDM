@@ -1177,7 +1177,7 @@ function CDM:DisableBlizzardPlayerCastBar()
     if blizzardCastBarDisabled then
         return true
     end
-    if not CfgVal("hideBlizzardCastBar", false) or not PlayerCastingBarFrame then
+    if not CfgVal("hideBlizzardCastBar", true) or not PlayerCastingBarFrame then
         return false
     end
 

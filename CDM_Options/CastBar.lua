@@ -6,12 +6,74 @@ local CDM = Runtime
 local UI = ns.ConfigUI
 local L = Runtime.L
 
+local castBarExpanded = {}
 
 local function CreateCastBarTab(page, tabId)
-    local scrollChild = UI.CreateScrollableTab(page, "CDM_CastBarScrollFrame", 700, 370)
+    local scrollChild, scrollFrame = UI.CreateScrollableTab(page, "CDM_CastBarScrollFrame", 700, 650)
+    local scrollContent = scrollFrame:GetScrollChild()
 
-    local layout = UI.CreateVerticalLayout(0)
-    local function NextY(spacing) return layout:Next(spacing) end
+    local sections = {}
+
+    local function UpdateScrollHeight()
+        local height = 20 + 26 + 20 + 20
+        for i, section in ipairs(sections) do
+            height = height + section:GetHeight()
+            if i > 1 then height = height + 14 end
+        end
+        scrollContent:SetHeight(height)
+        scrollChild:SetHeight(height - 20)
+    end
+
+    local function CollapsibleSection(key, label, contentHeight)
+        local section = CreateFrame("Frame", nil, scrollChild)
+        section:SetWidth(580)
+        local previous = sections[#sections]
+        if previous then
+            section:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -14)
+        else
+            section:SetPoint("TOPLEFT", page.controls.castBarEnabled, "BOTTOMLEFT", 34, -20)
+        end
+
+        local header = CreateFrame("Button", nil, section)
+        header:SetPoint("TOPLEFT")
+        header:SetSize(580, 24)
+        local arrow = header:CreateTexture(nil, "ARTWORK")
+        arrow:SetTexture("Interface\\AddOns\\CDM\\Media\\Textures\\collapse")
+        arrow:SetPoint("LEFT")
+        arrow:SetSize(14, 14)
+        arrow:SetVertexColor(1, 0.82, 0, 1)
+        local title = UI.CreateHeader(header, label)
+        title:ClearAllPoints()
+        title:SetPoint("LEFT", arrow, "RIGHT", 8, 0)
+        local highlight = header:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(1, 0.82, 0, 0.08)
+
+        local content = CreateFrame("Frame", nil, section)
+        content:SetPoint("TOPLEFT", 0, -30)
+        content:SetSize(580, contentHeight)
+        function section:SetContentHeight(value)
+            contentHeight = value
+            content:SetHeight(value)
+            section:SetHeight(castBarExpanded[key] and (30 + value) or 24)
+            UpdateScrollHeight()
+        end
+        local function UpdateSection()
+            local expanded = castBarExpanded[key] == true
+            content:SetShown(expanded)
+            arrow:SetRotation(expanded and 0 or math.pi / 2)
+            section:SetHeight(expanded and (30 + contentHeight) or 24)
+            UpdateScrollHeight()
+        end
+        header:SetScript("OnClick", function()
+            castBarExpanded[key] = not castBarExpanded[key]
+            UI.CloseAllDropdownMenus()
+            UpdateSection()
+        end)
+        sections[#sections + 1] = section
+        UpdateSection()
+        return section, content
+    end
 
     local enabled = CDM.db.castBarEnabled ~= false
     page.controls.castBarEnabled = UI.CreateModernCheckbox(
@@ -23,9 +85,23 @@ local function CreateCastBarTab(page, tabId)
             API:Refresh("STYLE")
         end
     )
-    page.controls.castBarEnabled:SetPoint("TOPLEFT", -34, NextY(0))
+    page.controls.castBarEnabled:SetPoint("TOPLEFT", -34, 0)
+    page.controls.castBarEnabled:SetWidth(170)
 
-    local blizzHidden = CDM.db.hideBlizzardCastBar or false
+    local previewEnabled = CDM.db.castBarPreviewEnabled == true
+    page.controls.castBarPreviewEnabled = UI.CreateModernCheckbox(
+        scrollChild,
+        L["Show Preview"] or "Show Preview",
+        previewEnabled,
+        function(checked)
+            CDM.db.castBarPreviewEnabled = checked
+            API:Refresh("STYLE")
+        end
+    )
+    page.controls.castBarPreviewEnabled:SetPoint("LEFT", page.controls.castBarEnabled, "RIGHT", 0, 0)
+    page.controls.castBarPreviewEnabled:SetWidth(160)
+
+    local blizzHidden = CDM.db.hideBlizzardCastBar ~= false
     page.controls.hideBlizzardCastBar = UI.CreateModernCheckbox(
         scrollChild,
         L["Hide Blizzard Cast Bar"],
@@ -37,15 +113,13 @@ local function CreateCastBarTab(page, tabId)
             end
         end
     )
-    page.controls.hideBlizzardCastBar:SetPoint("LEFT", page.controls.castBarEnabled, "RIGHT", 0, 0)
-    NextY(35)
+    page.controls.hideBlizzardCastBar:SetPoint("LEFT", page.controls.castBarPreviewEnabled, "RIGHT", 0, 0)
+    page.controls.hideBlizzardCastBar:SetWidth(230)
 
-    local dimHeader = UI.CreateHeader(scrollChild, L["Dimensions"])
-    dimHeader:SetPoint("TOPLEFT", 0, NextY(0))
-    NextY(30)
+    local dimensionsSection, dimensions = CollapsibleSection("dimensions", L["Dimensions"], 135)
 
     page.controls.castBarWidthSlider = UI.CreateModernSlider(
-        scrollChild,
+        dimensions,
         L["Width (0 = Auto)"],
         0, 1000,
         CDM.db.castBarWidth or 300,
@@ -60,11 +134,11 @@ local function CreateCastBarTab(page, tabId)
             API:Refresh("STYLE")
         end
     )
-    page.controls.castBarWidthSlider:SetPoint("TOPLEFT", 0, NextY(0))
+    page.controls.castBarWidthSlider:SetPoint("TOPLEFT")
 
     local autoSourceChecked = (CDM.db.castBarAutoWidthSource == "utility")
     page.controls.castBarAutoWidthSource = UI.CreateModernCheckbox(
-        scrollChild,
+        dimensions,
         L["Match Utility Width"],
         autoSourceChecked,
         function(checked)
@@ -73,10 +147,8 @@ local function CreateCastBarTab(page, tabId)
         end
     )
     page.controls.castBarAutoWidthSource:SetPoint("TOPLEFT", page.controls.castBarWidthSlider, "BOTTOMLEFT", 0, -5)
-    NextY(60)
-
     page.controls.castBarHeightSlider = UI.CreateModernSlider(
-        scrollChild,
+        dimensions,
         L["Height"],
         8, 50,
         CDM.db.castBarHeight or 20,
@@ -85,8 +157,6 @@ local function CreateCastBarTab(page, tabId)
             API:Refresh("STYLE")
         end
     )
-    page.controls.castBarHeightSlider:SetPoint("TOPLEFT", 0, NextY(0))
-
     function page.UpdateAutoWidthLayout()
         local isAuto = (CDM.db.castBarWidth or 300) == 0
         page.controls.castBarAutoWidthSource:SetShown(isAuto)
@@ -96,17 +166,15 @@ local function CreateCastBarTab(page, tabId)
         else
             page.controls.castBarHeightSlider:SetPoint("TOPLEFT", page.controls.castBarWidthSlider, "BOTTOMLEFT", 0, -10)
         end
+        dimensionsSection:SetContentHeight(isAuto and 135 or 100)
     end
     page.UpdateAutoWidthLayout()
-    NextY(60)
 
-    local iconHeader = UI.CreateHeader(scrollChild, L["Spell Icon"])
-    iconHeader:SetPoint("TOPLEFT", 0, NextY(0))
-    NextY(30)
+    local _, iconContent = CollapsibleSection("icon", L["Spell Icon"], 160)
 
     local showIcon = CDM.db.castBarShowIcon or false
     page.controls.castBarShowIcon = UI.CreateModernCheckbox(
-        scrollChild,
+        iconContent,
         L["Show Spell Icon"],
         showIcon,
         function(checked)
@@ -114,15 +182,14 @@ local function CreateCastBarTab(page, tabId)
             API:Refresh("STYLE")
         end
     )
-    page.controls.castBarShowIcon:SetPoint("TOPLEFT", 0, NextY(0))
-    NextY(35)
+    page.controls.castBarShowIcon:SetPoint("TOPLEFT")
 
-    local iconPosLabel = scrollChild:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    local iconPosLabel = iconContent:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     iconPosLabel:SetText(L["Icon Position:"])
-    iconPosLabel:SetPoint("TOPLEFT", 0, NextY(0))
+    iconPosLabel:SetPoint("TOPLEFT", page.controls.castBarShowIcon, "BOTTOMLEFT", 0, -10)
 
-    local ddIconPos = UI.CreateDropdown(scrollChild)
-    ddIconPos:SetPoint("TOPLEFT", 0, NextY(20))
+    local ddIconPos = UI.CreateDropdown(iconContent)
+    ddIconPos:SetPoint("TOPLEFT", iconPosLabel, "BOTTOMLEFT", 0, -5)
     ddIconPos:SetWidth(150)
     ddIconPos:SetDefaultText(CDM.db.castBarIconPosition or "LEFT")
     page.controls.castBarIconPositionDropdown = ddIconPos
@@ -142,10 +209,8 @@ local function CreateCastBarTab(page, tabId)
             API:Refresh("STYLE")
         end
     )
-    NextY(50)
-
     page.controls.castBarIconGapSlider = UI.CreateModernSlider(
-        scrollChild,
+        iconContent,
         L["Icon-Bar Gap"],
         -1, 20,
         CDM.db.castBarIconGap or 1,
@@ -154,16 +219,13 @@ local function CreateCastBarTab(page, tabId)
             API:Refresh("STYLE")
         end
     )
-    page.controls.castBarIconGapSlider:SetPoint("TOPLEFT", 0, NextY(0))
-    NextY(60)
+    page.controls.castBarIconGapSlider:SetPoint("TOPLEFT", ddIconPos, "BOTTOMLEFT", 0, -10)
 
-    local texHeader = UI.CreateHeader(scrollChild, L["Bar Texture"])
-    texHeader:SetPoint("TOPLEFT", 0, NextY(0))
-    NextY(30)
+    local textureSection, textureContent = CollapsibleSection("texture", L["Bar Texture"], 75)
 
     local useAtlas = CDM.db.castBarUseAtlasTextures ~= false
     page.controls.castBarUseAtlas = UI.CreateModernCheckbox(
-        scrollChild,
+        textureContent,
         L["Use Blizzard Atlas Textures"],
         useAtlas,
         function(checked)
@@ -172,25 +234,32 @@ local function CreateCastBarTab(page, tabId)
             if page.castBarLSMGroup then
                 page.castBarLSMGroup:SetShown(showLSM)
             end
-            if page.castBarPositionHeader then
-                page.castBarPositionHeader:ClearAllPoints()
-                if showLSM then
-                    page.castBarPositionHeader:SetPoint("TOPLEFT", page.castBarLSMGroup, "BOTTOMLEFT", 0, -10)
-                else
-                    page.castBarPositionHeader:SetPoint("TOPLEFT", page.controls.castBarUseAtlas, "BOTTOMLEFT", 0, -15)
-                end
-            end
+            textureSection:SetContentHeight(showLSM and 400 or 75)
             API:Refresh("STYLE")
         end
     )
-    page.controls.castBarUseAtlas:SetPoint("TOPLEFT", 0, NextY(0))
+    page.controls.castBarUseAtlas:SetPoint("TOPLEFT")
 
-    local lsmGroup = CreateFrame("Frame", nil, scrollChild)
+    local showSpark = CDM.db.castBarShowSpark
+    if showSpark == nil then showSpark = true end
+    page.controls.castBarShowSpark = UI.CreateModernCheckbox(
+        textureContent,
+        L["Show Spark"],
+        showSpark,
+        function(checked)
+            CDM.db.castBarShowSpark = checked
+            API:Refresh("STYLE")
+        end
+    )
+    page.controls.castBarShowSpark:SetPoint("TOPLEFT", page.controls.castBarUseAtlas, "BOTTOMLEFT", 0, -10)
+
+    local lsmGroup = CreateFrame("Frame", nil, textureContent)
     lsmGroup:SetSize(600, 310)
-    lsmGroup:SetPoint("TOPLEFT", page.controls.castBarUseAtlas, "BOTTOMLEFT", 0, -10)
+    lsmGroup:SetPoint("TOPLEFT", page.controls.castBarShowSpark, "BOTTOMLEFT", 0, -10)
     page.castBarLSMGroup = lsmGroup
 
     lsmGroup:SetShown(not useAtlas)
+    textureSection:SetContentHeight(useAtlas and 75 or 400)
 
     local lsmLayout = UI.CreateVerticalLayout(0)
     local function LsmNextY(spacing) return lsmLayout:Next(spacing) end
@@ -265,13 +334,7 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarUninterruptibleColor = UI.CreateColorSwatch(lsmGroup, L["Uninterruptible Color"], "castBarUninterruptibleColor", "STYLE")
     page.controls.castBarUninterruptibleColor:SetPoint("TOPLEFT", 0, LsmNextY(40))
 
-    local posHeader = UI.CreateHeader(scrollChild, L["Position"])
-    page.castBarPositionHeader = posHeader
-    if not useAtlas then
-        posHeader:SetPoint("TOPLEFT", lsmGroup, "BOTTOMLEFT", 0, -10)
-    else
-        posHeader:SetPoint("TOPLEFT", page.controls.castBarUseAtlas, "BOTTOMLEFT", 0, -15)
-    end
+    local _, positionContent = CollapsibleSection("position", L["Position"], 320)
 
     local POINT_OPTIONS = {
         { value = "TOPLEFT",     label = L["Top Left"] or "Top Left" },
@@ -299,11 +362,11 @@ local function CreateCastBarTab(page, tabId)
         return opts
     end
 
-    local anchorLabel = scrollChild:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    local anchorLabel = positionContent:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     anchorLabel:SetText(L["Anchor To:"] or "Anchor To:")
-    anchorLabel:SetPoint("TOPLEFT", posHeader, "BOTTOMLEFT", 0, -15)
+    anchorLabel:SetPoint("TOPLEFT")
 
-    local ddAnchor = UI.CreateDropdown(scrollChild)
+    local ddAnchor = UI.CreateDropdown(positionContent)
     ddAnchor:SetPoint("TOPLEFT", anchorLabel, "BOTTOMLEFT", 0, -5)
     ddAnchor:SetWidth(200)
     page.controls.castBarAnchor = ddAnchor
@@ -329,11 +392,11 @@ local function CreateCastBarTab(page, tabId)
         end
     )
 
-    local anchorPointLabel = scrollChild:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    local anchorPointLabel = positionContent:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     anchorPointLabel:SetText(L["Anchor Point:"] or "Anchor Point:")
     anchorPointLabel:SetPoint("TOPLEFT", ddAnchor, "BOTTOMLEFT", 0, -10)
 
-    local ddAnchorPoint = UI.CreateDropdown(scrollChild)
+    local ddAnchorPoint = UI.CreateDropdown(positionContent)
     ddAnchorPoint:SetPoint("TOPLEFT", anchorPointLabel, "BOTTOMLEFT", 0, -5)
     ddAnchorPoint:SetWidth(200)
     page.controls.castBarAnchorPoint = ddAnchorPoint
@@ -357,11 +420,11 @@ local function CreateCastBarTab(page, tabId)
         end
     )
 
-    local targetPointLabel = scrollChild:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    local targetPointLabel = positionContent:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     targetPointLabel:SetText(L["Target Point:"] or "Target Point:")
     targetPointLabel:SetPoint("TOPLEFT", ddAnchorPoint, "BOTTOMLEFT", 0, -10)
 
-    local ddTargetPoint = UI.CreateDropdown(scrollChild)
+    local ddTargetPoint = UI.CreateDropdown(positionContent)
     ddTargetPoint:SetPoint("TOPLEFT", targetPointLabel, "BOTTOMLEFT", 0, -5)
     ddTargetPoint:SetWidth(200)
     page.controls.castBarTargetPoint = ddTargetPoint
@@ -379,7 +442,7 @@ local function CreateCastBarTab(page, tabId)
     )
 
     page.controls.castBarOffsetXSlider = UI.CreateModernSlider(
-        scrollChild,
+        positionContent,
         L["X Offset"],
         -800, 800,
         CDM.db.castBarOffsetX or 0,
@@ -391,7 +454,7 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarOffsetXSlider:SetPoint("TOPLEFT", ddTargetPoint, "BOTTOMLEFT", 0, -15)
 
     page.controls.castBarOffsetYSlider = UI.CreateModernSlider(
-        scrollChild,
+        positionContent,
         L["Y Offset"],
         -600, 600,
         CDM.db.castBarOffsetY or -166,
@@ -410,24 +473,10 @@ local function CreateCastBarTab(page, tabId)
         end)
     end
 
-    local previewEnabled = CDM.db.castBarPreviewEnabled == true
-    page.controls.castBarPreviewEnabled = UI.CreateModernCheckbox(
-        scrollChild,
-        L["Show Preview"] or "Show Preview",
-        previewEnabled,
-        function(checked)
-            CDM.db.castBarPreviewEnabled = checked
-            API:Refresh("STYLE")
-        end
-    )
-    page.controls.castBarPreviewEnabled:SetPoint("TOPLEFT", page.controls.castBarOffsetYSlider, "BOTTOMLEFT", 0, -15)
-
-    local textHeader = UI.CreateHeader(scrollChild, L["Text"])
-    page.castBarTextHeader = textHeader
-    textHeader:SetPoint("TOPLEFT", page.controls.castBarPreviewEnabled, "BOTTOMLEFT", 0, -15)
+    local textSection, textContent = CollapsibleSection("text", L["Text"], 410)
 
     page.controls.castBarFontSizeSlider = UI.CreateModernSlider(
-        scrollChild,
+        textContent,
         L["Font Size"],
         8, 24,
         CDM.db.castBarFontSize or 15,
@@ -436,12 +485,12 @@ local function CreateCastBarTab(page, tabId)
             API:Refresh("STYLE")
         end
     )
-    page.controls.castBarFontSizeSlider:SetPoint("TOPLEFT", textHeader, "BOTTOMLEFT", 0, -15)
+    page.controls.castBarFontSizeSlider:SetPoint("TOPLEFT")
 
     local showName = CDM.db.castBarShowSpellName
     if showName == nil then showName = true end
     page.controls.castBarShowSpellName = UI.CreateModernCheckbox(
-        scrollChild,
+        textContent,
         L["Show Spell Name"],
         showName,
         function(checked)
@@ -452,7 +501,7 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarShowSpellName:SetPoint("TOPLEFT", page.controls.castBarFontSizeSlider, "BOTTOMLEFT", 0, -10)
 
     page.controls.castBarNameMaxCharsSlider = UI.CreateModernSlider(
-        scrollChild,
+        textContent,
         L["Max Name Length (0 = Full)"],
         0, 30,
         CDM.db.castBarNameMaxChars or 0,
@@ -464,7 +513,7 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarNameMaxCharsSlider:SetPoint("TOPLEFT", page.controls.castBarShowSpellName, "BOTTOMLEFT", 0, -10)
 
     page.controls.castBarNameOffsetX = UI.CreateModernSlider(
-        scrollChild,
+        textContent,
         L["Name X Offset"],
         -50, 50,
         CDM.db.castBarNameOffsetX or 4,
@@ -476,7 +525,7 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarNameOffsetX:SetPoint("TOPLEFT", page.controls.castBarNameMaxCharsSlider, "BOTTOMLEFT", 0, -10)
 
     page.controls.castBarNameOffsetY = UI.CreateModernSlider(
-        scrollChild,
+        textContent,
         L["Name Y Offset"],
         -20, 20,
         CDM.db.castBarNameOffsetY or 0,
@@ -490,7 +539,7 @@ local function CreateCastBarTab(page, tabId)
     local showTimer = CDM.db.castBarShowTimer
     if showTimer == nil then showTimer = true end
     page.controls.castBarShowTimer = UI.CreateModernCheckbox(
-        scrollChild,
+        textContent,
         L["Show Timer"],
         showTimer,
         function(checked)
@@ -501,7 +550,7 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarShowTimer:SetPoint("TOPLEFT", page.controls.castBarNameOffsetY, "BOTTOMLEFT", 0, -10)
 
     page.controls.castBarShowTotalDuration = UI.CreateModernCheckbox(
-        scrollChild,
+        textContent,
         L["Show Total Duration (e.g. 0.5/1.5)"],
         CDM.db.castBarShowTotalDuration == true,
         function(checked)
@@ -512,7 +561,7 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarShowTotalDuration:SetPoint("TOPLEFT", page.controls.castBarShowTimer, "BOTTOMLEFT", 0, -10)
 
     page.controls.castBarTimerOffsetX = UI.CreateModernSlider(
-        scrollChild,
+        textContent,
         L["Timer X Offset"],
         -50, 50,
         CDM.db.castBarTimerOffsetX or -4,
@@ -524,7 +573,7 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarTimerOffsetX:SetPoint("TOPLEFT", page.controls.castBarShowTotalDuration, "BOTTOMLEFT", 0, -10)
 
     page.controls.castBarTimerOffsetY = UI.CreateModernSlider(
-        scrollChild,
+        textContent,
         L["Timer Y Offset"],
         -20, 20,
         CDM.db.castBarTimerOffsetY or 0,
@@ -535,24 +584,10 @@ local function CreateCastBarTab(page, tabId)
     )
     page.controls.castBarTimerOffsetY:SetPoint("TOPLEFT", page.controls.castBarTimerOffsetX, "BOTTOMLEFT", 0, -10)
 
-    local showSpark = CDM.db.castBarShowSpark
-    if showSpark == nil then showSpark = true end
-    page.controls.castBarShowSpark = UI.CreateModernCheckbox(
-        scrollChild,
-        L["Show Spark"],
-        showSpark,
-        function(checked)
-            CDM.db.castBarShowSpark = checked
-            API:Refresh("STYLE")
-        end
-    )
-    page.controls.castBarShowSpark:SetPoint("TOPLEFT", page.controls.castBarTimerOffsetY, "BOTTOMLEFT", 0, -10)
-
     local _, playerClass = UnitClass("player")
-    local castBarEffectsAnchor = page.controls.castBarShowSpark
     if playerClass == "MAGE" then
         page.controls.castBarShowArcaneMissilesTicks = UI.CreateModernCheckbox(
-            scrollChild,
+            textContent,
             L["Show Arcane Missiles ticks"],
             CDM.db.castBarShowArcaneMissilesTicks == true,
             function(checked)
@@ -560,15 +595,16 @@ local function CreateCastBarTab(page, tabId)
                 if page.controls.castBarArcaneMissiles4Piece then
                     page.controls.castBarArcaneMissiles4Piece:SetShown(checked)
                 end
+                textSection:SetContentHeight(checked and 485 or 450)
                 API:Refresh("STYLE")
             end
         )
         page.controls.castBarShowArcaneMissilesTicks:SetPoint(
-            "TOPLEFT", page.controls.castBarShowSpark, "BOTTOMLEFT", 0, -10
+            "TOPLEFT", page.controls.castBarTimerOffsetY, "BOTTOMLEFT", 0, -10
         )
 
         page.controls.castBarArcaneMissiles4Piece = UI.CreateModernCheckbox(
-            scrollChild,
+            textContent,
             L["4p"],
             CDM.db.castBarArcaneMissiles4Piece == true,
             function(checked)
@@ -580,22 +616,21 @@ local function CreateCastBarTab(page, tabId)
             "TOPLEFT", page.controls.castBarShowArcaneMissilesTicks, "BOTTOMLEFT", 20, -10
         )
         page.controls.castBarArcaneMissiles4Piece:SetShown(CDM.db.castBarShowArcaneMissilesTicks == true)
-        castBarEffectsAnchor = page.controls.castBarArcaneMissiles4Piece
+        textSection:SetContentHeight(CDM.db.castBarShowArcaneMissilesTicks == true and 485 or 450)
     end
 
     local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
     local hasEmpoweredCasts = (playerClass == "EVOKER") or (specID == 250) or (specID == 269)
     if hasEmpoweredCasts then
-        local empHeader = UI.CreateHeader(scrollChild, L["Empowered Stages"])
-        empHeader:SetPoint("TOPLEFT", castBarEffectsAnchor, "BOTTOMLEFT", 0, -15)
+        local empowerSection, empowerContent = CollapsibleSection("empower", L["Empowered Stages"], 205)
 
-        page.controls.castBarEmpowerWindUpColor = UI.CreateColorSwatch(scrollChild, L["Wind Up Color"], "castBarEmpowerWindUpColor", "STYLE")
-        page.controls.castBarEmpowerWindUpColor:SetPoint("TOPLEFT", empHeader, "BOTTOMLEFT", 0, -15)
+        page.controls.castBarEmpowerWindUpColor = UI.CreateColorSwatch(empowerContent, L["Wind Up Color"], "castBarEmpowerWindUpColor", "STYLE")
+        page.controls.castBarEmpowerWindUpColor:SetPoint("TOPLEFT")
 
-        page.controls.castBarEmpowerStage1Color = UI.CreateColorSwatch(scrollChild, L["Stage 1 Color"], "castBarEmpowerStage1Color", "STYLE")
+        page.controls.castBarEmpowerStage1Color = UI.CreateColorSwatch(empowerContent, L["Stage 1 Color"], "castBarEmpowerStage1Color", "STYLE")
         page.controls.castBarEmpowerStage1Color:SetPoint("TOPLEFT", page.controls.castBarEmpowerWindUpColor, "BOTTOMLEFT", 0, -10)
 
-        page.controls.castBarEmpowerStage2Color = UI.CreateColorSwatch(scrollChild, L["Stage 2 Color"], "castBarEmpowerStage2Color", "STYLE")
+        page.controls.castBarEmpowerStage2Color = UI.CreateColorSwatch(empowerContent, L["Stage 2 Color"], "castBarEmpowerStage2Color", "STYLE")
         page.controls.castBarEmpowerStage2Color:SetPoint("TOPLEFT", page.controls.castBarEmpowerStage1Color, "BOTTOMLEFT", 0, -10)
 
         -- Font of Magic talent: Preservation 375783, Devastation 411212, Augmentation 408083
@@ -603,13 +638,14 @@ local function CreateCastBarTab(page, tabId)
         local lastAnchor = page.controls.castBarEmpowerStage2Color
 
         if hasFontOfMagic then
-            page.controls.castBarEmpowerStage3Color = UI.CreateColorSwatch(scrollChild, L["Stage 3 Color"], "castBarEmpowerStage3Color", "STYLE")
+            page.controls.castBarEmpowerStage3Color = UI.CreateColorSwatch(empowerContent, L["Stage 3 Color"], "castBarEmpowerStage3Color", "STYLE")
             page.controls.castBarEmpowerStage3Color:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -10)
             lastAnchor = page.controls.castBarEmpowerStage3Color
         end
 
-        page.controls.castBarEmpowerStage4Color = UI.CreateColorSwatch(scrollChild, L["Hold At Max Color"], "castBarEmpowerStage4Color", "STYLE")
+        page.controls.castBarEmpowerStage4Color = UI.CreateColorSwatch(empowerContent, L["Hold At Max Color"], "castBarEmpowerStage4Color", "STYLE")
         page.controls.castBarEmpowerStage4Color:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -10)
+        empowerSection:SetContentHeight(hasFontOfMagic and 190 or 150)
     end
 end
 
