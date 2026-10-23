@@ -341,10 +341,10 @@ end
 
 local function CreateGlowPreview(page, anchor, pandemic)
     local icon = CreateFrame("Frame", nil, page)
-    icon:SetPoint("LEFT", anchor, "RIGHT", 80, 0)
+    icon:SetPoint("CENTER", anchor, "LEFT", 320, 0)
     local texture = icon:CreateTexture(nil, "ARTWORK")
     texture:SetAllPoints()
-    texture:SetTexture(135846)
+    texture:SetTexture(134400)
 
     local function Stop()
         CDM.Glow:RequestBuffGlow(icon, false)
@@ -356,7 +356,7 @@ local function CreateGlowPreview(page, anchor, pandemic)
         if not page:IsVisible() then return end
         local enabled = not pandemic or (CDM.db.hidePandemicIndicator == true
             and CDM.db.pandemicCustomizationEnabled == true)
-        icon:SetSize(40, 40)
+        icon:SetSize(52, 52)
         CDM.CONST.ApplyIconTexCoord(texture, CDM.CONST.GetEffectiveZoomAmount())
         Stop()
         CDM.BORDER:CreateBorder(icon, { forceUpdate = true })

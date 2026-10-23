@@ -10,6 +10,7 @@ local GetCursorPosition = GetCursorPosition
 local GetCurrentKeyBoardFocus = GetCurrentKeyBoardFocus
 local GetPhysicalScreenSize = GetPhysicalScreenSize
 local InCombatLockdown = InCombatLockdown
+local securecall = securecall
 local IsShiftKeyDown = IsShiftKeyDown
 local math_abs = math.abs
 local math_ceil = math.ceil
@@ -843,11 +844,27 @@ function AnchorMode:Enter(button)
     if CDM.SetAnchorModeActive then
         CDM:SetAnchorModeActive(true)
     end
-    BuildEntries()
-    BuildGrid()
-    for _, entry in ipairs(self.entries) do
-        self.overlays[#self.overlays + 1] = CreateOverlay(entry)
+    local settings = _G.CooldownViewerSettings
+    if settings and not settings:IsShown() then
+        self.openedSettings = settings
+        securecall("ShowUIPanel", settings)
     end
+    -- Blizzard populates inactive buff previews when its settings open. Wait
+    -- for those frames and CDM's layout before capturing anchor bounds.
+    self.entryTimer = C_Timer.NewTimer(0, function()
+        self.entryTimer = nil
+        if not self.active or InCombatLockdown() then return end
+        CDM:Refresh("LAYOUT")
+        self.entryTimer = C_Timer.NewTimer(0, function()
+            self.entryTimer = nil
+            if not self.active or InCombatLockdown() then return end
+            BuildEntries()
+            for _, entry in ipairs(self.entries) do
+                self.overlays[#self.overlays + 1] = CreateOverlay(entry)
+            end
+        end)
+    end)
+    BuildGrid()
     self.selectedEntry = nil
     local panel = CreateNudgePanel()
     CreateAnchorBanner():Show()
@@ -865,6 +882,10 @@ end
 function AnchorMode:Exit(reopenConfig)
     if not self.active then return end
     self.active = false
+    if self.entryTimer then
+        self.entryTimer:Cancel()
+        self.entryTimer = nil
+    end
     if dragging then
         CommitDrag(not InCombatLockdown())
     else
@@ -884,6 +905,10 @@ function AnchorMode:Exit(reopenConfig)
     end
     if self.button then self.button:UnlockHighlight() end
     self.button = nil
+    if self.openedSettings and not InCombatLockdown() then
+        securecall("HideUIPanel", self.openedSettings)
+        self.openedSettings = nil
+    end
     if reopenConfig and not InCombatLockdown() and CDM.API and CDM.API.ShowConfig then
         CDM.API:ShowConfig()
     end
@@ -912,6 +937,10 @@ CDM:RegisterCombatStateHandler(function(isInCombat)
             AnchorMode:Exit(false)
         end
     else
+        if AnchorMode.openedSettings then
+            securecall("HideUIPanel", AnchorMode.openedSettings)
+            AnchorMode.openedSettings = nil
+        end
         CDM:UpdateEditModeSelectionOverlays()
         if pendingCombatRefresh then
             pendingCombatRefresh = false
