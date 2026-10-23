@@ -373,7 +373,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local minGridHeight = GRID_ICON_SIZE + GRID_FRAME_INSET * 2
 
     local iconBarFrame = CreateFrame("Frame", nil, subPage)
-    iconBarFrame:SetPoint("TOPLEFT", LEFT_INSET, -26)
+    iconBarFrame:SetPoint("TOPLEFT", LEFT_INSET, -16)
     iconBarFrame:SetSize(1, minGridHeight)
 
     local iconViewFrame = CreateFrame("Frame", nil, iconBarFrame)

@@ -179,7 +179,7 @@ local function BuildCooldownText(subPage, page)
     CompactSlider(charges, L["Y Offset"], "chargeOffsetY", -240, -50, 50)
 
     local utilitySection, utility = CollapsibleSection("utility", L["Utility"], 260, 288)
-    utilitySection:SetPoint("TOPLEFT", timerSection, "BOTTOMLEFT", 290, -14)
+    utilitySection:SetPoint("TOPLEFT", chargesSection, "BOTTOMLEFT", 0, -14)
     CompactSlider(utility, L["Cooldown Font Size"], "utilityCooldownFontSize", 0, 8, 32)
     CompactSlider(utility, L["Charges Font Size"], "utilityChargeFontSize", -50, 8, 32)
     ColorSwatch(utility, L["Color"], "utilityChargeColor", -100)

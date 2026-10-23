@@ -43,7 +43,7 @@ local function ApplyFooterTextStyle(fontString)
     local fontName = db.textFont or defaults.textFont or "Expressway"
     local fontOutline = nil
     local fontPath = (LSM and LSM:Fetch("font", fontName)) or CDM_C.FONT_PATH
-    local fontSize = (CDM.Pixel and CDM.Pixel.FontSize(24)) or 24
+    local fontSize = (CDM.Pixel and CDM.Pixel.FontSize(18)) or 18
 
     fontString:SetFontObject("CDM_GameFontHighlightSmall")
     local setOk = fontString:SetFont(fontPath, fontSize, fontOutline)
@@ -214,10 +214,6 @@ local function CreateConfigFrame()
     titleContainer:SetPoint("TOPRIGHT", ConfigFrame, "TOPRIGHT", 0, 0)
     titleContainer:SetHeight(52)
     titleContainer:SetFrameLevel(ConfigFrame:GetFrameLevel() + 10)
-    titleContainer:EnableMouse(true)
-    titleContainer:RegisterForDrag("LeftButton")
-    titleContainer:SetScript("OnDragStart", function() ConfigFrame:StartMoving() end)
-    titleContainer:SetScript("OnDragStop", function() ConfigFrame:StopMovingOrSizing() end)
 
     local titleLogo = titleContainer:CreateTexture(nil, "OVERLAY")
     titleLogo:SetSize(112, 112)
@@ -317,7 +313,7 @@ local function CreateConfigFrame()
     panelBgHolder:SetBackdropBorderColor(0.25, 0.25, 0.27, 1)
 
     versionText = ConfigFrame:CreateFontString(nil, "OVERLAY")
-    versionText:SetPoint("BOTTOMRIGHT", ConfigFrame, "BOTTOMRIGHT", -13, 10)
+    versionText:SetPoint("BOTTOMRIGHT", ConfigFrame, "BOTTOMRIGHT", -16, 6)
     ApplyFooterTextStyle(versionText)
     versionText:SetText(GetAddonVersionText() or "")
     if UI and UI.SetTextFaint then

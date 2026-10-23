@@ -2407,7 +2407,7 @@ local function CreateBuffGroupsTab(page)
         { id = "buffs", label = L["Buffs"] },
         { id = "general", label = L["General"] },
         { id = "text", label = L["Text"] },
-    }, "buffs")
+    }, "buffs", 100)
     CreateBuffGroupsPanel(tabBar.subPages.buffs, page)
     ns._CreateBuffTextPanel(tabBar.subPages.text, page)
 

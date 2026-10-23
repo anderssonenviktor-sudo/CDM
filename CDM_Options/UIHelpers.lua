@@ -284,17 +284,17 @@ function UI.CreateConfigWindow(parent, name)
     local closeText = closeButton:CreateFontString(nil, "OVERLAY", "CDM_Font14")
     closeText:SetPoint("CENTER")
     closeText:SetText("X")
-    closeText:SetTextColor(0.75, 0.75, 0.75, 1)
+    closeText:SetTextColor(0.9, 0.15, 0.15, 1)
 
     closeButton:SetScript("OnClick", function() frame:Hide() end)
     closeButton:SetScript("OnEnter", function(self)
-        closeText:SetTextColor(GOLD.r, GOLD.g, GOLD.b, 1)
+        closeText:SetTextColor(1, 0.35, 0.35, 1)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["Close"])
         GameTooltip:Show()
     end)
     closeButton:SetScript("OnLeave", function()
-        closeText:SetTextColor(0.75, 0.75, 0.75, 1)
+        closeText:SetTextColor(0.9, 0.15, 0.15, 1)
         GameTooltip:Hide()
     end)
     closeButton:SetScript("OnHide", function() GameTooltip:Hide() end)
@@ -1335,7 +1335,7 @@ function UI.GetOptionLabel(options, value, default)
     return default or value
 end
 
-function UI.CreateSubTabBar(parent, tabs, initialTab)
+function UI.CreateSubTabBar(parent, tabs, initialTab, fixedTabWidth)
     local TAB_HEIGHT = 37
     local barFrame = CreateFrame("Frame", nil, parent)
     barFrame:SetPoint("TOPLEFT", parent, "TOPLEFT", 30, -2)
@@ -1393,7 +1393,7 @@ function UI.CreateSubTabBar(parent, tabs, initialTab)
         btn.label = label
 
         local textWidth = label:GetStringWidth()
-        btn:SetWidth(math.max(textWidth + 28, 80))
+        btn:SetWidth(fixedTabWidth or math.max(textWidth + 28, 80))
 
         if prevBtn then
             btn:SetPoint("BOTTOMLEFT", prevBtn, "BOTTOMRIGHT", 4, 0)
