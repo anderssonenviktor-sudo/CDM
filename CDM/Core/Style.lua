@@ -27,6 +27,24 @@ local VIEWERS_WITH_OVERRIDE = CDM_C.VIEWERS_WITH_OVERRIDE
 local Pixel = CDM.Pixel
 local Snap = Pixel.Snap
 
+function CDM.StyleSolidBarSpark(spark, statusBar, height, border)
+    spark:SetTexture(CDM_C.TEX_WHITE8X8)
+    spark:SetTexCoord(0, 1, 0, 1)
+    spark:SetDesaturated(false)
+    spark:SetVertexColor(1, 1, 1, 0.8)
+    spark:SetBlendMode("ADD")
+    local backdrop = border and border:GetBackdrop()
+    local inset = 0
+    if backdrop then
+        inset = math_max(0, (backdrop.edgeSize or 0) - Snap(GetConfigValue("borderOffsetY", 0)))
+    end
+    -- Keep the solid line inside the border while the engine positions the fill edge.
+    spark:SetSize(Snap(2), math_max(Pixel.GetSize(), Snap(height) - inset * 2))
+    local fillTexture = statusBar:GetStatusBarTexture()
+    spark:ClearAllPoints()
+    spark:SetPoint("CENTER", fillTexture or statusBar, fillTexture and "RIGHT" or "LEFT", 0, 0)
+end
+
 local styleBorderCtx = { active = false, version = 0, force = false }
 local iconBorderCtx = { active = false, version = 0 }
 local barBorderCtx = { active = false, version = 0 }
@@ -220,7 +238,7 @@ local function RefreshStyleCache()
     styleCache.buffBarGrowDirection = CfgValue(db, defaults, "buffBarGrowDirection", "DOWN")
     styleCache.buffBarIconPosition = CfgValue(db, defaults, "buffBarIconPosition", "LEFT")
     styleCache.buffBarIconGap = CfgValue(db, defaults, "buffBarIconGap", 2)
-    styleCache.buffBarShowName = CfgValue(db, defaults, "buffBarShowName", true)
+    styleCache.buffBarShowName = CfgValue(db, defaults, "buffBarShowName", false)
     styleCache.buffBarNameMaxChars = CfgValue(db, defaults, "buffBarNameMaxChars", 0)
     styleCache.buffBarShowDuration = CfgValue(db, defaults, "buffBarShowDuration", true)
     styleCache.buffBarTexture = CfgValue(db, defaults, "buffBarTexture", "Blizzard")

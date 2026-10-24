@@ -498,6 +498,10 @@ local function CreateBar(index, parent)
     textOverlay:SetAllPoints(sb)
     textOverlay:SetFrameLevel(sb:GetFrameLevel() + LEVEL_TEXT)
 
+    local spark = textOverlay:CreateTexture(nil, "ARTWORK")
+    spark:Hide()
+    wrap._spark = spark
+
     local nameText = textOverlay:CreateFontString(nil, "OVERLAY")
     wrap._nameText = nameText
 
@@ -575,6 +579,14 @@ end
 -- the model helpers) but called from inside it.
 local BuildStackLayers, BuildTicks, ReleaseStackLayers, ReleaseTicks
 local AnchorStackOverlays
+
+local function StyleSpark(bar, cfg, height)
+    bar._spark:SetShown(cfg.showSpark == true)
+    if cfg.showSpark ~= true then return end
+    local border = cfg.hideBorder ~= true and bar._barBorderHost.border
+    if border and not border:IsShown() then border = nil end
+    CDM.StyleSolidBarSpark(bar._spark, bar._bar, height, border)
+end
 
 -- Style one bar entirely from its own config. `offsetAccum` is how far the
 -- run of bars already extends inside this host, and `grow` comes from the
@@ -709,6 +721,7 @@ local function StyleBar(bar, cfg, offsetAccum, grow, host)
         EnsureBorder(bar, "_iconBorderHost", "_iconBorderVer", icf, 1)
     end
 
+    StyleSpark(bar, cfg, h)
     return width, h
 end
 
@@ -1503,9 +1516,12 @@ local function Rebuild()
         for i = 1, #live do
             local cfg = live[i].bar
             local bar = barFrames[i]
-            if bar and cfg.barType == M.TYPE_STACK then
-                AnchorStackOverlays(bar)
-                BuildTicks(bar, cfg, bar:GetWidth(), cfg.height or 20)
+            if bar then
+                StyleSpark(bar, cfg, cfg.height or 20)
+                if cfg.barType == M.TYPE_STACK then
+                    AnchorStackOverlays(bar)
+                    BuildTicks(bar, cfg, bar:GetWidth(), cfg.height or 20)
+                end
             end
         end
     end)

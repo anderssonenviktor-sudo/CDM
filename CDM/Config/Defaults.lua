@@ -200,13 +200,13 @@ CDM.defaults = {
     buffBarSpacing = 1,
     buffBarGrowDirection = "DOWN",   -- "UP" or "DOWN"
     buffBarIconPosition = "LEFT",   -- "LEFT", "RIGHT", "HIDDEN"
-    buffBarIconGap = 1,             -- Gap between icon and bar
-    buffBarShowName = true,
+    buffBarIconGap = -1,             -- Gap between icon and bar
+    buffBarShowName = false,
     buffBarNameMaxChars = 0,
     buffBarShowDuration = true,
     buffBarTexture = "Solid",
-    buffBarColor = { r = 0.4, g = 0.6, b = 0.9, a = 1 },
-    buffBarBackgroundColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.8 },
+    buffBarColor = { r = 0.1, g = 0.9, b = 0, a = 1 },
+    buffBarBackgroundColor = { r = 0, g = 0, b = 0, a = 0.75 },
     buffBarDualMode = false,        -- 2 bars per row: [bar-icon] [icon-bar]
     buffBarNameFontSize = 15,
     buffBarNameColor = { r = 1, g = 1, b = 1, a = 1 },
@@ -320,8 +320,8 @@ CDM.defaults = {
     ungroupedCustomBuffOrder = {},
     buffGroups = {},
     ungroupedBuffOverrides = {},
-    -- Custom buff bars: ungrouped bars live in buffBarTimers[specID].bars,
-    -- grouped ones in buffBarGroups[specID][i].bars. See Modules/BuffBarModel.
+    -- Legacy ungrouped storage is retained for import compatibility.
+    -- Current custom bars live in buffBarGroups[specID][i].bars.
     buffBarTimers = {},
     buffBarGroups = {},
     cooldownGroups = {},

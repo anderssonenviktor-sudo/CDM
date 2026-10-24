@@ -339,7 +339,7 @@ function UI.CreateConfigWindow(parent, name)
     return frame
 end
 
-function UI.CreateTextButton(parent)
+function UI.CreateTextButton(parent, tint)
     local button = CreateFrame("Button", nil, parent)
     local text = button:CreateFontString(nil, "OVERLAY", "CDM_Font12")
     text:SetPoint("LEFT", 6, 0)
@@ -367,6 +367,12 @@ function UI.CreateTextButton(parent)
             background:SetColorTexture(0.05, 0.05, 0.055, 0.95)
             SetControlBorder(borders, 0.25, 0.25, 0.28, 1)
             text:SetTextColor(0.85, 0.85, 0.85, 1)
+        end
+        if tint and button:IsEnabled() then
+            local strength = pressed and 0.18 or hovered and 0.15 or 0.12
+            background:SetColorTexture(math.max(0.035, tint.r * strength),
+                math.max(0.035, tint.g * strength), math.max(0.035, tint.b * strength), 0.8)
+            SetControlBorder(borders, tint.r, tint.g, tint.b, pressed and 0.8 or hovered and 0.65 or 0.45)
         end
     end
 

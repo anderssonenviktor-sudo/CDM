@@ -413,7 +413,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 41
+local DB_SCHEMA_VERSION = 43
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1492,6 +1492,72 @@ local PROFILE_MIGRATIONS = {
         version = 41,
         run = function(profile)
             profile.trinketsHideAura = nil
+        end,
+    },
+    {
+        version = 42,
+        run = function(profile)
+            local legacy = profile.buffBarTimers
+            if type(legacy) ~= "table" then return end
+            for specID, specData in pairs(legacy) do
+                local bars = type(specData) == "table" and specData.bars
+                if type(bars) == "table" and #bars > 0 then
+                    if type(profile.buffBarGroups) ~= "table" then profile.buffBarGroups = {} end
+                    local groups = profile.buffBarGroups[specID]
+                    if type(groups) ~= "table" then
+                        groups = {}
+                        profile.buffBarGroups[specID] = groups
+                    end
+                    local first = groups[1]
+                    if type(first) ~= "table" then
+                        local grow = profile.buffBarGrowDirection == "UP" and "UP" or "DOWN"
+                        local point = grow == "UP" and "BOTTOMLEFT" or "TOPLEFT"
+                        first = {
+                            name = L["BAR1"], bars = {}, grow = grow,
+                            spacing = type(profile.buffBarSpacing) == "number" and profile.buffBarSpacing or 1,
+                            -- Keep legacy bars attached to the same viewer anchor.
+                            anchorTarget = "buffBar", anchorPoint = point, anchorRelativeTo = point,
+                            offsetX = 0, offsetY = 0,
+                        }
+                        groups[1] = first
+                    end
+                    if type(first.bars) ~= "table" then first.bars = {} end
+                    for _, bar in ipairs(bars) do
+                        if type(bar) == "table" then first.bars[#first.bars + 1] = bar end
+                    end
+                    specData.bars = nil
+                    if next(specData) == nil then legacy[specID] = nil end
+                end
+            end
+            if next(legacy) == nil then profile.buffBarTimers = nil end
+        end,
+    },
+    {
+        version = 43,
+        run = function(profile)
+            profile.buffBarShowName = nil
+            local function HideNames(bars)
+                if type(bars) ~= "table" then return end
+                for _, bar in ipairs(bars) do
+                    if type(bar) == "table" then bar.showName = false end
+                end
+            end
+            local groups = profile.buffBarGroups
+            if type(groups) == "table" then
+                for _, specGroups in pairs(groups) do
+                    if type(specGroups) == "table" then
+                        for _, group in ipairs(specGroups) do
+                            if type(group) == "table" then HideNames(group.bars) end
+                        end
+                    end
+                end
+            end
+            local legacy = profile.buffBarTimers
+            if type(legacy) == "table" then
+                for _, specData in pairs(legacy) do
+                    if type(specData) == "table" then HideNames(specData.bars) end
+                end
+            end
         end,
     },
 }

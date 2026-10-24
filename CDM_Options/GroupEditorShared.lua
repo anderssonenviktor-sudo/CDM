@@ -284,7 +284,14 @@ function Shared.CreateRightPanelManager(rightPanel, placeholder, destroyFrame)
             end
             return dropdown
         end,
-        CreateScrollContent = function(minHeight)
+        CreateScrollContent = function(minHeight, reuseContent)
+            -- Opt-in callers build inside child frames and keep the scroll geometry intact.
+            if reuseContent and rightScrollFrame and rightContentFrame then
+                CloseDropdownMenus()
+                table.wipe(rightPanelDropdowns)
+                UI.ClearChildren(rightContentFrame)
+                return rightScrollFrame, rightContentFrame
+            end
             Reset(false)
 
             local sf = CreateFrame("ScrollFrame", nil, rightPanel, "ScrollFrameTemplate")

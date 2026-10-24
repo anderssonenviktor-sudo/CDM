@@ -6,9 +6,9 @@ local LSM = LibStub("LibSharedMedia-3.0")
 local GetSpellTexture = C_Spell.GetSpellTexture
 local GetSpellName = C_Spell.GetSpellName
 
-function ns.CreateBuffBarPreview(parent)
+function ns.CreateBuffBarPreview(parent, compact)
     local preview = CreateFrame("Frame", nil, parent)
-    preview:SetSize(280, 108)
+    preview:SetSize(280, compact and 72 or 108)
     local titleIcon = CreateFrame("Frame", nil, preview)
     titleIcon:SetSize(26, 26)
     titleIcon:SetPoint("TOPLEFT", 0, 0)
@@ -20,9 +20,11 @@ function ns.CreateBuffBarPreview(parent)
     title:SetJustifyH("LEFT")
     title:SetWordWrap(false)
     title:SetTextColor(C.GOLD.r, C.GOLD.g, C.GOLD.b, 1)
+    titleIcon:SetShown(not compact)
+    title:SetShown(not compact)
 
     local wrap = CreateFrame("Frame", nil, preview)
-    wrap:SetPoint("CENTER", preview, "TOP", 0, -64)
+    wrap:SetPoint("CENTER", preview, "TOP", 0, compact and -34 or -64)
     local icon = wrap:CreateTexture(nil, "ARTWORK")
     local fill = CreateFrame("StatusBar", nil, wrap)
     local background = fill:CreateTexture(nil, "BACKGROUND")
@@ -32,6 +34,8 @@ function ns.CreateBuffBarPreview(parent)
     local textHost = CreateFrame("Frame", nil, fill)
     textHost:SetAllPoints()
     textHost:SetFrameLevel(fill:GetFrameLevel() + 1)
+    local spark = textHost:CreateTexture(nil, "ARTWORK")
+    spark:Hide()
     local name = textHost:CreateFontString(nil, "OVERLAY")
     local duration = textHost:CreateFontString(nil, "OVERLAY")
     local stacks = textHost:CreateFontString(nil, "OVERLAY")
@@ -80,14 +84,10 @@ function ns.CreateBuffBarPreview(parent)
 
     function preview:Refresh()
         if not bar then return end
-        local width = bar.width
-        if width == 0 then
-            width = (CDM.CalculateEssentialRow1Width and CDM.CalculateEssentialRow1Width()) or 200
-        end
-        width = math.max(60, width)
-        local height = bar.height
-        local scale = math.min(1, math.max(60, self:GetWidth() - 20) / width)
-        wrap:SetScale(scale)
+        local width = (CDM.CalculateEssentialRow1Width and CDM.CalculateEssentialRow1Width()) or 200
+        width = math.min(math.max(60, width), math.max(60, self:GetWidth() - 20))
+        local height = 20
+        wrap:SetScale(1)
         wrap:SetSize(width, height)
         icon:SetTexture((bar.spellID and GetSpellTexture(bar.spellID)) or 134400)
         C.ApplyIconTexCoord(icon, C.GetEffectiveZoomAmount())
@@ -112,6 +112,12 @@ function ns.CreateBuffBarPreview(parent)
         StyleBorder(iconBorder, icon, bar.hideBorder ~= true and bar.iconPosition ~= "HIDDEN")
         local texture = LSM:Fetch("statusbar", bar.texture) or C.TEX_WHITE8X8
         fill:SetStatusBarTexture(texture)
+        spark:SetShown(bar.showSpark == true)
+        if bar.showSpark == true then
+            local border = bar.hideBorder ~= true and barBorder.border
+            if border and not border:IsShown() then border = nil end
+            CDM.StyleSolidBarSpark(spark, fill, height, border)
+        end
         background:SetTexture(texture)
         local bg = bar.bgColor
         background:SetVertexColor(bg.r, bg.g, bg.b, bg.a or 1)

@@ -1053,18 +1053,8 @@ local function UpdateCastBarFromConfig(frame)
         frame.sparkObj:SetVertexColor(1, 1, 1, 1)
         frame.sparkObj:SetSize(16, Snap(h * 2))
     else
-        frame.sparkObj:SetTexture(CDM_C.TEX_WHITE8X8)
-        frame.sparkObj:SetTexCoord(0, 1, 0, 1)
-        frame.sparkObj:SetDesaturated(false)
-        frame.sparkObj:SetVertexColor(1, 1, 1, 0.8)
         local border = frame.borderFrame and frame.borderFrame.border
-        local backdrop = border and border:GetBackdrop()
-        local inset = 0
-        if backdrop then
-            inset = math.max(0, (backdrop.edgeSize or 0) - Snap(CfgVal("borderOffsetY", 0)))
-        end
-        -- The spark draws above the border, so keep the solid line inside its inner edges.
-        frame.sparkObj:SetSize(Snap(2), math.max(Pixel.GetSize(), Snap(h) - inset * 2))
+        CDM.StyleSolidBarSpark(frame.sparkObj, frame.barObj, h, border)
     end
 
     if useAtlas then

@@ -31,11 +31,11 @@ local math_floor = math.floor
 --     width = 0, height = 20, texture = "Solid",
 --     barColor = {...}, bgColor = {...},
 --     iconPosition = "LEFT", iconGap = 1,
---     showName = true, nameMaxChars = 0, nameFontSize = 15, nameColor = {...},
+--     showName = false, nameMaxChars = 0, nameFontSize = 15, nameColor = {...},
 --     nameOffsetX = 2, nameOffsetY = 0,
 --     showDuration = true, durationFontSize = 15, durationColor = {...},
 --     durationPosition = "RIGHT", durationOffsetX = -2, durationOffsetY = 0,
---     timerDecimals = true, decimalThreshold = 5,
+--     timerDecimals = true, decimalThreshold = 5, showSpark = false,
 --     -- stack-only:
 --     maxStacks = 20, alwaysShow = true,
 --     colorThresholds = { { stacks = 10, color = {r,g,b,a} }, ... },
@@ -92,7 +92,7 @@ local BAR_VISUAL_KEYS = {
     { key = "texture",            global = "buffBarTexture",               default = "Solid" },
     { key = "iconPosition",       global = "buffBarIconPosition",          default = "LEFT" },
     { key = "iconGap",            global = "buffBarIconGap",               default = 1 },
-    { key = "showName",           global = "buffBarShowName",              default = true },
+    { key = "showName",           global = "buffBarShowName",              default = false },
     { key = "nameMaxChars",       global = "buffBarNameMaxChars",          default = 0 },
     { key = "nameFontSize",       global = "buffBarNameFontSize",          default = 15 },
     { key = "nameOffsetX",        global = "buffBarNameOffsetX",           default = 2 },
@@ -141,6 +141,7 @@ function M.NormalizeBar(bar)
     end
     if bar.timerDecimals == nil then bar.timerDecimals = true end
     if bar.hideBorder == nil then bar.hideBorder = false end
+    if bar.showSpark == nil then bar.showSpark = false end
 
     if bar.barType == M.TYPE_STACK then
         -- Never 0: the fill range is (0, maxStacks) and a zero span would make
