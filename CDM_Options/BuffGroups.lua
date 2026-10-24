@@ -46,7 +46,7 @@ StaticPopupDialogs["CDM_CONFIRM_DELETE_GROUP"] = {
     preferredIndex = 3,
 }
 
-local function CreateBuffGroupsPanel(page, tabPage)
+local function CreateBuffGroupsPanel(page)
     local divider = page:CreateTexture(nil, "ARTWORK")
     UI.StyleDivider(divider)
     divider:SetPoint("TOP", page, "TOP", 0, 0)
@@ -74,7 +74,6 @@ local function CreateBuffGroupsPanel(page, tabPage)
         ungroupedDbKey = "ungroupedBuffOverrides",
         getCurrentSpecID = function() return currentSpecID end,
         setCurrentSpecID = function(v) currentSpecID = v end,
-        getPlayerSpecID = function() return playerSpecID end,
         setPlayerSpecID = function(v) playerSpecID = v end,
         normalizeToBase = NormalizeToBase,
         extraCloneFields = { "staticDisplay", "countFontSize", "countColor", "countPosition", "countOffsetX", "countOffsetY" },
@@ -2335,23 +2334,6 @@ local function CreateBuffGroupsPanel(page, tabPage)
         BuildLeftPanel()
     end
 
-    local specDropdown, RefreshSpecDropdownText = Shared.CreateSpecDropdown(page, "TOPRIGHT", -6, -8, {
-        getPlayerSpecID = function() return playerSpecID end,
-        getCurrentSpecID = function() return currentSpecID end,
-        onSelectionChange = function(specID)
-            if customBuffPopup then customBuffPopup:Hide() end
-            currentSpecID = specID
-            selectedGroupIndex = nil
-            selectedSpellID = nil
-            selectedSpellGroupIndex = nil
-            ClearRightPanel()
-            RefreshAll()
-        end,
-    })
-
-    specDropdown:ClearAllPoints()
-    specDropdown:SetPoint("TOPRIGHT", tabPage, "TOPRIGHT", -6, -8)
-
     local RegisterViewerCallbacks, UnregisterViewerCallbacks = Shared.CreateViewerSettingsCallbacks(QueueLeftPanelRefresh)
 
     page:SetScript("OnMouseUp", function()
@@ -2370,7 +2352,6 @@ local function CreateBuffGroupsPanel(page, tabPage)
         local prevSpecID = currentSpecID
         playerSpecID = si and GetSpecializationInfo(si) or nil
         currentSpecID = playerSpecID
-        RefreshSpecDropdownText()
         RegisterViewerCallbacks()
         if currentSpecID ~= prevSpecID then
             selectedGroupIndex = nil
@@ -2409,7 +2390,7 @@ local function CreateBuffGroupsTab(page)
         { id = "general", label = L["General"] },
         { id = "text", label = L["Text"] },
     }, "buffs", 100)
-    CreateBuffGroupsPanel(tabBar.subPages.buffs, page)
+    CreateBuffGroupsPanel(tabBar.subPages.buffs)
     ns._CreateBuffTextPanel(tabBar.subPages.text, page)
 
     local generalPage = tabBar.subPages.general

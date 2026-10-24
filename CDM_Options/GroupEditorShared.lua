@@ -42,20 +42,6 @@ function Shared.GetClassCatalog()
     return CLASS_LIST, CLASS_SPECS
 end
 
-local function GetSpecLabel(specID)
-    for _, classInfo in ipairs(CLASS_LIST) do
-        local specs = CLASS_SPECS[classInfo.classTag]
-        if specs then
-            for _, specInfo in ipairs(specs) do
-                if specInfo.specID == specID then
-                    return classInfo.className .. " - " .. specInfo.specName
-                end
-            end
-        end
-    end
-    return nil
-end
-
 Shared.GROW_OPTIONS = {
     { label = "Right", value = "RIGHT" },
     { label = "Left", value = "LEFT" },
@@ -313,6 +299,16 @@ function Shared.CreateRightPanelManager(rightPanel, placeholder, destroyFrame)
             rc:SetWidth(sf:GetWidth() > 0 and sf:GetWidth() - 20 or 400)
             rc:SetHeight(minHeight or 400)
             sf:SetScrollChild(rc)
+            -- Tabs can be built before their anchored width is available.
+            local function UpdateContentWidth()
+                local width = sf:GetWidth()
+                if width > 20 then
+                    rc:SetWidth(width - 20)
+                end
+            end
+            sf:HookScript("OnSizeChanged", UpdateContentWidth)
+            sf:HookScript("OnShow", UpdateContentWidth)
+            UpdateContentWidth()
             rc:Show()
             rightContentFrame = rc
             return sf, rc
@@ -1127,60 +1123,6 @@ function Shared.CreateViewerSettingsCallbacks(queueFn)
     return Register, Unregister
 end
 
-function Shared.CreateSpecDropdown(parent, anchorPoint, anchorX, anchorY, config)
-    local L = Runtime.L
-
-    local dropdown = UI.CreateDropdown(parent)
-    dropdown:SetWidth(200)
-    dropdown:SetPoint(anchorPoint, parent, anchorPoint, anchorX, anchorY)
-
-    local function GetText()
-        local cur = config.getCurrentSpecID()
-        if cur == config.getPlayerSpecID() then return L["Current Spec"] end
-        if cur then return GetSpecLabel(cur) or L["Current Spec"] end
-        return L["Current Spec"]
-    end
-
-    local function SetSelection(specID)
-        C_Timer.After(0, function()
-            if not parent:IsShown() then return end
-            config.onSelectionChange(specID)
-            dropdown:OverrideText(GetText())
-        end)
-    end
-
-    local function RefreshText()
-        dropdown:OverrideText(GetText())
-    end
-
-    dropdown:SetDefaultText(GetText())
-    dropdown:SetupMenu(function(_, rootDescription)
-        rootDescription:CreateRadio(L["Current Spec"], function()
-            return config.getCurrentSpecID() == config.getPlayerSpecID()
-        end, function()
-            SetSelection(config.getPlayerSpecID())
-        end)
-        rootDescription:CreateDivider()
-        for _, classInfo in ipairs(CLASS_LIST) do
-            local color = RAID_CLASS_COLORS[classInfo.classTag]
-            local coloredName = color and color:WrapTextInColorCode(classInfo.className) or classInfo.className
-            local submenu = rootDescription:CreateButton(coloredName)
-            local specs = CLASS_SPECS[classInfo.classTag]
-            if specs then
-                for _, specInfo in ipairs(specs) do
-                    submenu:CreateRadio(specInfo.specName, function()
-                        return config.getCurrentSpecID() == specInfo.specID
-                    end, function()
-                        SetSelection(specInfo.specID)
-                    end)
-                end
-            end
-        end
-    end)
-
-    return dropdown, RefreshText
-end
-
 function Shared.CreateGroupEditorPools(parent, config)
     local CDM = Runtime
     local leftWidth = Shared.LEFT_WIDTH
@@ -1314,7 +1256,6 @@ function Shared.CreateGroupEditorHelpers(config)
     local ungroupedDbKey = config.ungroupedDbKey
     local getCurrentSpecID = config.getCurrentSpecID
     local setCurrentSpecID = config.setCurrentSpecID
-    local getPlayerSpecID = config.getPlayerSpecID
     local setPlayerSpecID = config.setPlayerSpecID
     local normalizeToBase = config.normalizeToBase
     local extraCloneFields = config.extraCloneFields
@@ -1322,9 +1263,8 @@ function Shared.CreateGroupEditorHelpers(config)
     local function RefreshCurrentSpecID()
         local si = GetSpecialization()
         local newPlayerSpec = si and GetSpecializationInfo(si) or nil
-        local wasViewingPlayer = (getCurrentSpecID() == getPlayerSpecID()) or (getCurrentSpecID() == nil)
         setPlayerSpecID(newPlayerSpec)
-        if wasViewingPlayer then setCurrentSpecID(newPlayerSpec) end
+        setCurrentSpecID(newPlayerSpec)
     end
 
     local function EnsureGroups()

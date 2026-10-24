@@ -15,31 +15,31 @@ local WHITE = CDM_C.WHITE or { r = 1, g = 1, b = 1, a = 1 }
 
 local colorSwatchesByKey = {}
 
-local function CreateControlSurface(frame, pooled)
+local function CreateControlSurface(frame)
     local function Texture(layer)
-        local texture = pooled and frame:AttachTexture() or frame:CreateTexture(nil, layer)
-        texture:SetDrawLayer(layer)
+        local texture = frame:CreateTexture(nil, layer)
         return texture
     end
 
     local background = Texture("BACKGROUND")
-    background:SetAllPoints()
+    background:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    background:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
     local borders = {}
     local top = Texture("BORDER")
-    top:SetPoint("TOPLEFT")
-    top:SetPoint("TOPRIGHT")
+    top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     top:SetHeight(1)
     local bottom = Texture("BORDER")
-    bottom:SetPoint("BOTTOMLEFT")
-    bottom:SetPoint("BOTTOMRIGHT")
+    bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
     bottom:SetHeight(1)
     local left = Texture("BORDER")
-    left:SetPoint("TOPLEFT")
-    left:SetPoint("BOTTOMLEFT")
+    left:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
     left:SetWidth(1)
     local right = Texture("BORDER")
-    right:SetPoint("TOPRIGHT")
-    right:SetPoint("BOTTOMRIGHT")
+    right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
     right:SetWidth(1)
     borders[1], borders[2], borders[3], borders[4] = top, bottom, left, right
     return background, borders
@@ -69,7 +69,7 @@ function UI.StyleDivider(texture)
 end
 
 local ConfigMenuStyle = CreateFromMixins(MenuStyle1Mixin)
-local MENU_INSET = { left = 6, right = 6, top = 8, bottom = 8 }
+local MENU_INSET = { left = 1, right = 1, top = 1, bottom = 1 }
 local MENU_ROW_HEIGHT = 26
 local MENU_CHILD_PADDING = { width = 0, height = 0 }
 
@@ -82,17 +82,41 @@ function ConfigMenuStyle:GetChildExtentPadding()
     return MENU_CHILD_PADDING
 end
 
-function ConfigMenuStyle:Generate()
-    -- AttachTexture participates in the menu compositor's pool/reset lifecycle.
-    local shadow = self:AttachTexture()
-    shadow:SetDrawLayer("BACKGROUND", -1)
-    shadow:SetPoint("TOPLEFT", -3, 3)
-    shadow:SetPoint("BOTTOMRIGHT", 3, -3)
-    shadow:SetColorTexture(0, 0, 0, 0.35)
+function ConfigMenuStyle:InitScrollLayout(childWidth, maxScrollExtent)
+    MenuProxyMixin.InitScrollLayout(self, childWidth, maxScrollExtent)
+    -- The native layout reserves an extra ten pixels beyond the scrollbar.
+    self:SetFixedSize(
+        childWidth + MENU_INSET.left + MENU_INSET.right + self.ScrollBar:GetWidth(),
+        maxScrollExtent + MENU_INSET.top + MENU_INSET.bottom
+    )
+end
 
-    local background, borders = CreateControlSurface(self, true)
-    background:SetColorTexture(0.055, 0.055, 0.065, 1)
-    SetControlBorder(borders, 0.28, 0.28, 0.31, 1)
+function ConfigMenuStyle:Generate()
+    -- The backdrop is attached after Blizzard acquires and configures the popup.
+end
+
+local function StyleAcquiredMenu(menu)
+    menu:SetAlpha(1)
+    menu:SetIgnoreParentAlpha(true)
+
+    -- AttachTemplate returns this surface to the menu pool when the popup closes.
+    local background = menu:AttachTemplate("BackdropTemplate")
+    background:SetAllPoints(menu)
+    background:SetFrameLevel(menu:GetFrameLevel())
+    background:SetAlpha(1)
+    background:SetIgnoreParentAlpha(true)
+    background:EnableMouse(false)
+    background:SetBackdrop({
+        bgFile = CDM_C.TEX_WHITE8X8,
+        edgeFile = CDM_C.TEX_WHITE8X8,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    background:SetBackdropColor(0.06, 0.06, 0.065, 1)
+    background:SetBackdropBorderColor(0.28, 0.28, 0.31, 1)
+    background:Show()
+
+    UI.StyleScrollBar(menu, menu.ScrollBox)
 end
 
 local function StyleMenuElement(frame, description)
@@ -158,11 +182,11 @@ local function StyleMenuDescription(description)
     end
 end
 
-function UI.CreateDropdown(parent)
+function UI.CreateDropdown(parent, fontObject)
     local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
     dropdown.Background:Hide()
     dropdown.Arrow:Hide()
-    dropdown.Text:SetFontObject("CDM_Font12")
+    dropdown.Text:SetFontObject(fontObject or "CDM_Font12")
     dropdown.Text:ClearAllPoints()
     dropdown.Text:SetPoint("LEFT", 10, 0)
     dropdown.Text:SetPoint("RIGHT", -28, 0)
@@ -190,6 +214,7 @@ function UI.CreateDropdown(parent)
     local setupMenu = dropdown.SetupMenu
     function dropdown:SetupMenu(generator)
         setupMenu(self, function(owner, rootDescription)
+            rootDescription:AddMenuAcquiredCallback(StyleAcquiredMenu)
             generator(owner, rootDescription)
             StyleMenuDescription(rootDescription)
         end)
@@ -200,6 +225,14 @@ function UI.CreateDropdown(parent)
     dropdown:HookScript("OnHide", function(self) self:CloseMenu() end)
     UpdateStyle()
     return dropdown
+end
+
+function UI.PositionDropdownRow(dropdown, label, parent, x, y, width)
+    dropdown:ClearAllPoints()
+    CDM.Pixel.SetPoint(dropdown, "TOPLEFT", parent, "TOPLEFT", x, y)
+    CDM.Pixel.SetSize(dropdown, width, 26)
+    label:ClearAllPoints()
+    label:SetPoint("LEFT", dropdown, "LEFT", -CDM.Pixel.Snap(x), 0)
 end
 
 local function StyleSliderWithSteppers(control)
@@ -845,14 +878,15 @@ function UI.AttachCloseMenusOnScroll(scrollFrame)
     end)
 end
 
-function UI.StyleScrollBar(scrollFrame)
+function UI.StyleScrollBar(scrollFrame, scrollRegion)
     local bar = scrollFrame.ScrollBar
     if not bar or bar._cdmStyled then return end
     bar._cdmStyled = true
 
+    local anchor = scrollRegion or scrollFrame
     bar:ClearAllPoints()
-    bar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 0, 0)
-    bar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 0, 0)
+    bar:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 0, 0)
+    bar:SetPoint("BOTTOMLEFT", anchor, "BOTTOMRIGHT", 0, 0)
     bar:SetWidth(10)
 
     local function HideArrow(button)
@@ -1052,17 +1086,35 @@ local function GetCachedMediaList(mediaType)
     return deduped
 end
 
-function UI.SetupMediaDropdown(dropdown, mediaType, getValue, setValue, setText)
+function UI.SetupMediaDropdown(dropdown, mediaType, getValue, setValue, setText, maxVisibleRows)
+    if maxVisibleRows then
+        dropdown:SetMenuAnchor(AnchorUtil.CreateAnchor("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -2))
+    end
     dropdown:SetupMenu(function(_, rootDescription)
-        rootDescription:SetScrollMode(500)
+        rootDescription:SetScrollMode(maxVisibleRows and MENU_ROW_HEIGHT * maxVisibleRows or 500)
         local list = GetCachedMediaList(mediaType)
         for _, name in ipairs(list) do
-            rootDescription:CreateRadio(name, function() return getValue() == name end, function()
+            local entry = rootDescription:CreateRadio(name, function() return getValue() == name end, function()
                 setValue(name)
                 if setText then
                     setText(name)
                 end
             end)
+            if mediaType == "statusbar" then
+                local path = LSM:Fetch(mediaType, name)
+                entry:AddInitializer(function(frame)
+                    local preview = frame:AttachTexture()
+                    preview:SetDrawLayer("BACKGROUND", -2)
+                    preview:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+                    preview:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+                    if type(path) == "string" and C_Texture.GetAtlasInfo(path) then
+                        preview:SetAtlas(path)
+                    else
+                        preview:SetTexture(path)
+                    end
+                    preview:SetVertexColor(1, 1, 1, 0.4)
+                end)
+            end
         end
     end)
 end

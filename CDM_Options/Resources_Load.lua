@@ -76,8 +76,7 @@ local function ShowBarLoad(loadPage, loadManager, classKey, barKey)
     modeLabel:SetPoint("TOPLEFT", 0, yOff)
 
     local modeDD = UI.CreateDropdown(rc)
-    modeDD:SetPoint("LEFT", modeLabel, "RIGHT", 10, 0)
-    modeDD:SetWidth(150)
+    UI.PositionDropdownRow(modeDD, modeLabel, rc, 184, yOff, 280)
     modeDD:SetDefaultText(L[GetLoadMode(classKey, barKey)] or L["Always"])
     loadManager.RegisterDropdown(modeDD)
     UI.SetupValueDropdown(modeDD, MODE_OPTIONS,
@@ -116,8 +115,7 @@ local function ShowBarLoad(loadPage, loadManager, classKey, barKey)
     combatLabel:SetPoint("TOPLEFT", 0, cYOff)
 
     local combatDD = UI.CreateDropdown(condContainer)
-    combatDD:SetPoint("LEFT", combatLabel, "RIGHT", 10, 0)
-    combatDD:SetWidth(160)
+    UI.PositionDropdownRow(combatDD, combatLabel, condContainer, 184, cYOff, 280)
     combatDD:SetDefaultText(L["Don't care"])
     if isConditional then loadManager.RegisterDropdown(combatDD) end
     UI.SetupValueDropdown(combatDD, COMBAT_OPTIONS,

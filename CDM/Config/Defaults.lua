@@ -8,6 +8,8 @@ local RESOURCE_BAR_COMMON = {
     barTexture = "Solid",
     bgTexture = "Solid",
     hideBorder = false,
+    borderThickness = 1,
+    borderColor = { r = 0, g = 0, b = 0, a = 1 },
     bgColor = { r = 0.2, g = 0.2, b = 0.2, a = 0.5 },
     anchorPoint = "BOTTOM",
     anchorTargetPoint = "TOP",

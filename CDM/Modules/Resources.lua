@@ -141,6 +141,11 @@ local cachedComboChargedEmpty
 local Pixel = CDM.Pixel
 local Snap = Pixel.Snap
 
+local function GetResourceBorderColor(barKey)
+    return CDM:GetBarSetting(barKey, "borderColor") or CDM.defaults.borderColor
+end
+
+
 local function SnapWidthToPixelGrid(frame, width)
     if not width or width <= 0 then
         return width, 0, 1
@@ -809,7 +814,7 @@ local function CreatePips(bar, maxPips, barWidth, barHeight)
 
     local color = bar.color
 
-    local borderColor = (CDM.db and CDM.db.borderColor) or (CDM.defaults and CDM.defaults.borderColor) or CDM_C.WHITE
+    local borderColor = GetResourceBorderColor(bar.barKey)
 
     local bgColor = (bar.barKey and CDM:GetBarSetting(bar.barKey, "bgColor")) or DEFAULT_BG_COLOR
 
@@ -1039,10 +1044,6 @@ local function CreateBar(powerType)
         bar.borderFrame:SetAllPoints()
     end
 
-    if CDM.BORDER and CDM.BORDER.CreateBorder then
-        CDM.BORDER:CreateBorder(bar.borderFrame)
-    end
-
     bar:Hide()
 
     CDM.resourceBars[powerType] = bar
@@ -1056,20 +1057,44 @@ local function CreateBar(powerType)
     return bar
 end
 
-local function EnsurePerBarBorder(bar, borderColor)
+-- Keep resource styling outside the global icon-border refresh registry.
+local function ApplyResourceBorder(host, barKey, color)
+    local border = host.border
+    if not border then
+        border = CreateFrame("Frame", nil, host, "BackdropTemplate")
+        border:SetAllPoints()
+        host.border = border
+    end
+    border:SetFrameLevel(host:GetFrameLevel() + 2)
+    local thickness = math_max(Pixel.GetSize(), Snap(CDM:GetBarSetting(barKey, "borderThickness") or 1))
+    if border.resourceBorderThickness ~= thickness then
+        border:SetBackdrop({ edgeFile = CDM_C.TEX_WHITE8X8, edgeSize = thickness })
+        if NineSliceUtil and NineSliceUtil.DisableSharpening then
+            NineSliceUtil.DisableSharpening(border)
+        end
+        border.resourceBorderThickness = thickness
+    end
+    border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
+    border:Show()
+end
+
+local function ResourceBordersMatch(firstKey, secondKey)
+    if CDM:GetBarSetting(firstKey, "borderThickness") ~= CDM:GetBarSetting(secondKey, "borderThickness") then
+        return false
+    end
+    local first = GetResourceBorderColor(firstKey)
+    local second = GetResourceBorderColor(secondKey)
+    return first.r == second.r and first.g == second.g and first.b == second.b
+        and (first.a or 1) == (second.a or 1)
+end
+
+local function EnsurePerBarBorder(bar, barKey, borderColor)
     if not bar.borderFrame then
         bar.borderFrame = CreateFrame("Frame", nil, bar)
         bar.borderFrame:SetAllPoints()
     end
     bar.borderFrame:Show()
-
-    if CDM.BORDER and CDM.BORDER.CreateBorder then
-        CDM.BORDER:CreateBorder(bar.borderFrame)
-        if bar.borderFrame.border then
-            bar.borderFrame.border:SetBackdropBorderColor(
-                borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-        end
-    end
+    ApplyResourceBorder(bar.borderFrame, barKey, borderColor)
 end
 
 local function RefreshPipSeparators(bar, borderColor)
@@ -1268,13 +1293,7 @@ local function ApplyUnifiedChain(hostIndex, chain, borderColor)
     host:SetFrameLevel((chain[1]:GetFrameLevel() or 0) + 1)
     host:Show()
 
-    if CDM.BORDER and CDM.BORDER.CreateBorder then
-        CDM.BORDER:CreateBorder(host)
-        if host.border then
-            host.border:SetBackdropBorderColor(
-                borderColor.r, borderColor.g, borderColor.b, borderColor.a or 1)
-        end
-    end
+    ApplyResourceBorder(host, chain[1].barKey, borderColor)
 
     for i = 1, #chain - 1 do
         ApplyChainHorizontalSeparator(entry, i, chain[i], borderColor)
@@ -1324,6 +1343,7 @@ local function BuildChains(activeKeys)
         if anchorTo and scratchActiveSet[anchorTo]
             and CDM:GetBarSetting(barKey, "hideBorder") ~= true
             and CDM:GetBarSetting(anchorTo, "hideBorder") ~= true
+            and ResourceBordersMatch(barKey, anchorTo)
             and not scratchActiveSet[barKey].hasPipSpacing
             and not scratchActiveSet[anchorTo].hasPipSpacing then
             local aP = CDM:GetBarSetting(barKey, "anchorPoint") or "BOTTOM"
@@ -1374,7 +1394,6 @@ local function BuildChains(activeKeys)
 end
 
 local function UpdateBorders(activeKeys)
-    local borderColor = (CDM.db and CDM.db.borderColor) or (CDM.defaults and CDM.defaults.borderColor) or CDM_C.WHITE
     local unified = CDM.db and CDM.db.unifiedBorder == true
 
     local chains, chainCount = BuildChains(activeKeys)
@@ -1382,6 +1401,7 @@ local function UpdateBorders(activeKeys)
     local hostIdx = 0
     for c = 1, chainCount do
         local chain = chains[c]
+        local borderColor = GetResourceBorderColor(chain[1].barKey)
         if chain[1].hasPipSpacing then
             local bar = chain[1]
             if bar.borderFrame then bar.borderFrame:Hide() end
@@ -1393,7 +1413,7 @@ local function UpdateBorders(activeKeys)
                 if hideBorder then
                     if pip.borderFrame then pip.borderFrame:Hide() end
                 else
-                    EnsurePerBarBorder(pip, borderColor)
+                    EnsurePerBarBorder(pip, bar.barKey, borderColor)
                 end
             end
         elseif CDM:GetBarSetting(chain[1].barKey, "hideBorder") == true then
@@ -1406,7 +1426,7 @@ local function UpdateBorders(activeKeys)
             ApplyUnifiedChain(hostIdx, chain, borderColor)
         else
             for _, bar in ipairs(chain) do
-                EnsurePerBarBorder(bar, borderColor)
+                EnsurePerBarBorder(bar, bar.barKey, borderColor)
                 RefreshPipSeparators(bar, borderColor)
                 HideBarUnifiedVerticalSeparators(bar)
             end
@@ -1769,8 +1789,6 @@ local function UpdateBarPositions()
         CDM.currentPowerTypes[i] = BAR_KEY_TO_POWER_TYPE[barKey]
     end
 
-    local borderColor = (CDM.db and CDM.db.borderColor) or (CDM.defaults and CDM.defaults.borderColor) or CDM_C.WHITE
-
     for _, barKey in ipairs(activeKeys) do
         local powerType = BAR_KEY_TO_POWER_TYPE[barKey]
         local bar = CreateBar(powerType)
@@ -1861,7 +1879,7 @@ local function UpdateBarPositions()
             if bar.separators then
                 local activeSeps = bar.activePipCount and (bar.activePipCount - 1) or 0
                 for i = 1, activeSeps do
-                    SetVertexColorIfChanged(bar.separators[i], borderColor)
+                    SetVertexColorIfChanged(bar.separators[i], GetResourceBorderColor(barKey))
                 end
             end
             UpdatePipBarVisuals(bar, powerType, barTexturePath, bgTexturePath, bgColor)
@@ -2312,59 +2330,6 @@ local function ReconcileResources()
     end
 end
 
-local COPY_BAR_WHITELIST_ALWAYS = {
-    "height", "width",
-    "barTexture", "bgTexture",
-    "tagEnabled", "tagFontSize", "tagAnchor", "tagOffsetX", "tagOffsetY",
-}
-
-local COPY_BAR_WHITELIST_POSITIONING = {
-    "anchorPoint", "anchorTargetPoint", "offsetX", "offsetY",
-}
-
-local COPY_BAR_FREE_ANCHORS = {
-    screen       = true,
-    playerFrame  = true,
-    essential    = true,
-}
-
-local function CopyBarSettingsSharesFreeAnchor(srcAnchorTo, dstAnchorTo)
-    local src = srcAnchorTo or "screen"
-    local dst = dstAnchorTo or "screen"
-    if src ~= dst then return false end
-    return COPY_BAR_FREE_ANCHORS[src] == true
-end
-
-local function CopyBarSettings(sourceClassKey, sourceBarKey, destClassKey, destBarKey)
-    if not sourceClassKey or not sourceBarKey or not destClassKey or not destBarKey then
-        return
-    end
-    if sourceClassKey == destClassKey and sourceBarKey == destBarKey then
-        return
-    end
-
-    for _, key in ipairs(COPY_BAR_WHITELIST_ALWAYS) do
-        local value = CDM:GetBarSettingForClass(sourceClassKey, sourceBarKey, key)
-        CDM:SetBarSettingForClass(destClassKey, destBarKey, key, value)
-    end
-
-    local srcAnchorTo = CDM:GetBarSettingForClass(sourceClassKey, sourceBarKey, "anchorTo")
-    local dstAnchorTo = CDM:GetBarSettingForClass(destClassKey, destBarKey, "anchorTo")
-    if CopyBarSettingsSharesFreeAnchor(srcAnchorTo, dstAnchorTo) then
-        for _, key in ipairs(COPY_BAR_WHITELIST_POSITIONING) do
-            local value = CDM:GetBarSettingForClass(sourceClassKey, sourceBarKey, key)
-            CDM:SetBarSettingForClass(destClassKey, destBarKey, key, value)
-        end
-    end
-
-    if CDM.OnResourcesProfileApplied then
-        CDM.OnResourcesProfileApplied()
-    end
-    if CDM.API and CDM.API.Refresh then
-        CDM.API:Refresh("RESOURCES", "LAYOUT")
-    end
-end
-
 CDM._Res = {
     SetStatusBarColorIfChanged = SetStatusBarColorIfChanged,
     SetVertexColorIfChanged    = SetVertexColorIfChanged,
@@ -2386,5 +2351,4 @@ CDM._Res = {
 
 CDM.ReconcileResources = ReconcileResources
 CDM.OnResourcesProfileApplied = OnResourcesProfileApplied
-CDM.CopyBarSettings = CopyBarSettings
 

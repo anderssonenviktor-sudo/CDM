@@ -205,7 +205,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
         ungroupedDbKey = "ungroupedCooldownOverrides",
         getCurrentSpecID = function() return currentSpecID end,
         setCurrentSpecID = function(v) currentSpecID = v end,
-        getPlayerSpecID = function() return playerSpecID end,
         setPlayerSpecID = function(v) playerSpecID = v end,
         normalizeToBase = NormalizeToBase,
         extraCloneFields = { "maxPerRow", "chargeFontSize", "chargeColor", "chargePosition", "chargeOffsetX", "chargeOffsetY" },
@@ -2531,20 +2530,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
         if self:IsShown() then QueueLeftPanelRefresh() end
     end)
 
-    local specDropdown, RefreshSpecDropdownText = Shared.CreateSpecDropdown(page, "TOPRIGHT", -6, -8, {
-        getPlayerSpecID = function() return playerSpecID end,
-        getCurrentSpecID = function() return currentSpecID end,
-        onSelectionChange = function(specID)
-            currentSpecID = specID
-            selectedGroupIndex = nil
-            selectedSpellID = nil
-            selectedSpellGroupIndex = nil
-            ClearRightPanel()
-            RefreshAll()
-        end,
-    })
-    specDropdown:Hide()
-
     local RegisterViewerCallbacks, UnregisterViewerCallbacks = Shared.CreateViewerSettingsCallbacks(QueueLeftPanelRefresh)
 
     subPage:HookScript("OnShow", function()
@@ -2556,12 +2541,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
         elseif selectedSpellID then
             ShowSpellSettings(selectedSpellID, selectedSpellGroupIndex)
         end
-        RefreshSpecDropdownText()
-        specDropdown:Show()
     end)
 
     subPage:HookScript("OnHide", function()
-        specDropdown:Hide()
         UnregisterViewerCallbacks()
         if UI and UI.CloseAllDropdownMenus then UI.CloseAllDropdownMenus() end
         CancelDrag()
@@ -2579,7 +2561,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
         if not subPage:IsShown() then return end
         if GetTime() < suppressPanelRefreshUntil then return end
         RefreshCurrentSpecID()
-        RefreshSpecDropdownText()
         QueueLeftPanelRefresh()
 
     end, 30, { "CD_DATA" })
