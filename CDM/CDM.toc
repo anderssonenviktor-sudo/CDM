@@ -1,6 +1,7 @@
-## Title: |cFF3bb273CDM|r
+## Title: |cFFFFD100CDM|r
+## IconTexture: Interface/AddOns/CDM/Media/Textures/lighticon
 ## Notes: Cooldown Manager
-## Author: Ayije (citrongrod now)
+## Author: Citrongroda
 ## Version: 1.18
 ## Interface: 120007, 120100
 ## DefaultState: enabled

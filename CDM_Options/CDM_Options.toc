@@ -1,7 +1,8 @@
 ## Interface: 120007, 120100
-## Title: |cFF3bb273CDM|r Options
-## Notes: Cooldown Manager Options UI
-## Author: Ayije (citrongrod now)
+## Title: |cFFFFD100CDM|r Options
+## IconTexture: Interface/AddOns/CDM/Media/Textures/lighticon
+## Notes: Cooldown Manager Options 
+## Author: Citrongroda
 ## Version: 1.18
 ## LoadOnDemand: 1
 ## Dependencies: CDM

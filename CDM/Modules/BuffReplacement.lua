@@ -63,7 +63,7 @@ function CDM:GetBuffReplacementOptions()
             local cooldownID = frame.cooldownID
             if CDM.IsSafeNumber(id) and CDM.IsSafeNumber(cooldownID) then
                 options[#options + 1] = { value = cooldownID, spellID = id,
-                    label = (GetSpellName(id) or tostring(id)) .. " (" .. cooldownID .. ")" }
+                    label = GetSpellName(id) or tostring(id) }
             end
         end
     end

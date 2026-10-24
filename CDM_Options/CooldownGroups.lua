@@ -966,20 +966,33 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     UI.CreateDropdown(rc))
                 replacementDropdown:SetWidth(220)
                 replacementDropdown:SetPoint("TOPLEFT", 0, yOff)
+                local function GetReplacementLabel(buffSpellID, label)
+                    local icon = buffSpellID and C_Spell.GetSpellTexture(buffSpellID)
+                    if icon then return string.format("|T%s:16:16|t %s", tostring(icon), label) end
+                    return label
+                end
+                local function GetReplacementOptions()
+                    local options = API:GetBuffReplacementOptions()
+                    for _, option in ipairs(options) do
+                        option.label = GetReplacementLabel(option.spellID, option.label)
+                    end
+                    return options
+                end
                 local selectedID = auraOv and auraOv.replaceBuffCooldownID or 0
                 local selectedSpell = auraOv and auraOv.replaceBuffSpellID
-                local selectedLabel = selectedSpell and (C_Spell.GetSpellName(selectedSpell) or tostring(selectedSpell)) or L["None"]
-                for _, option in ipairs(API:GetBuffReplacementOptions()) do
+                local selectedLabel = selectedSpell and GetReplacementLabel(selectedSpell,
+                    C_Spell.GetSpellName(selectedSpell) or tostring(selectedSpell)) or L["None"]
+                for _, option in ipairs(GetReplacementOptions()) do
                     if option.value == selectedID then selectedLabel = option.label end
                 end
                 replacementDropdown:SetDefaultText(selectedLabel)
                 UI.SetupValueDropdown(replacementDropdown,
-                    function() return API:GetBuffReplacementOptions() end,
+                    GetReplacementOptions,
                     function() return selectedID end,
                     function(value)
                         local ov = EnsureCooldownOverride()
                         if not ov then return end
-                        for _, option in ipairs(API:GetBuffReplacementOptions()) do
+                        for _, option in ipairs(GetReplacementOptions()) do
                             if option.value == value then
                                 API:SetBuffReplacement(ov, option, currentSpecID)
                                 selectedID = value

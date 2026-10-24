@@ -4,5 +4,4 @@
     <Script file="Core.lua"/>
     <Script file="SpecSpellCache.lua"/>
     <Script file="ProfileIO.lua"/>
-    <Script file="WagoUI.lua"/>
 </Ui>
