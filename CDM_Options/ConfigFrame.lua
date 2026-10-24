@@ -219,7 +219,7 @@ local function CreateConfigFrame()
     titleLogo:SetSize(112, 112)
     -- The logo artwork sits slightly below the center of its transparent canvas.
     titleLogo:SetPoint("CENTER", titleContainer, "CENTER", 0, 3)
-    titleLogo:SetTexture("Interface\\AddOns\\" .. ADDON_NAME .. "\\Media\\Textures\\cdmlightning2.tga")
+    titleLogo:SetTexture("Interface\\AddOns\\" .. ADDON_NAME .. "\\Media\\Textures\\cdmlightning.tga")
 
     local function CreateHeaderIconButton(textureName, iconSize, yOffset)
         local button = CreateFrame("Button", nil, titleContainer)
@@ -253,7 +253,7 @@ local function CreateConfigFrame()
         end
     end)
 
-    local editModeBtn = CreateHeaderIconButton("eye2", 64, 1)
+    local editModeBtn = CreateHeaderIconButton("eye", 64, 1)
     editModeBtn:SetPoint("LEFT", cdmBtn, "RIGHT", 4, 0)
     editModeBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -271,7 +271,7 @@ local function CreateConfigFrame()
         editModeOverlay:Show()
     end)
 
-    local anchorBtn = CreateHeaderIconButton("anchor2", 38)
+    local anchorBtn = CreateHeaderIconButton("anchor", 38)
     anchorBtn:SetPoint("LEFT", editModeBtn, "RIGHT", 2, 0)
     anchorBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
