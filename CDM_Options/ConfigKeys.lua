@@ -245,6 +245,7 @@ ns.ConfigKeys = {
                 "buffContainerLocked",
                 "buffBarContainerLocked",
                 "editModePositions",
+                "utilityAnchor",
                 "utilityYOffset",
             },
         },

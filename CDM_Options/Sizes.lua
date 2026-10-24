@@ -6,11 +6,15 @@ local CDM = Runtime
 local UI = ns.ConfigUI
 
 function ns.CreateIconSizeSlider(parent, label, key, field)
-    return UI.CreateModernSlider(parent, label, 20, 100, CDM.db[key][field], function(value)
+    local slider = UI.CreateModernSlider(parent, label, 20, 100, CDM.db[key][field], function(value)
         local current = CDM.db[key]
         local updated = { w = current.w, h = current.h }
         updated[field] = value
         CDM.db[key] = updated
         API:Refresh("LAYOUT")
     end)
+    slider:HookScript("OnShow", function(self)
+        self:UpdateUIValue(CDM.db[key][field])
+    end)
+    return slider
 end

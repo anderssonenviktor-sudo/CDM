@@ -155,16 +155,19 @@ local function CreateLayoutTab(page, tabId)
     local utilityHeight = ns.CreateIconSizeSlider(utility, L["Height"], "sizeUtility", "h")
     utilityHeight:SetPoint("TOPLEFT", utilityWidth, "BOTTOMLEFT", 0, -10)
 
-    local wrapCheckbox, utilWrapSlider, unlockCheckbox, xOffsetSlider, verticalCheckbox
+    local wrapCheckbox, utilWrapSlider, unlockCheckbox, verticalCheckbox
+    local anchorLabel
 
     local function UpdateUnlockControls()
         local wrapOn = CDM.db.utilityWrap == true
         local unlockOn = CDM.db.utilityUnlock == true
         utilWrapSlider:SetShown(wrapOn)
         unlockCheckbox:SetShown(wrapOn)
-        xOffsetSlider:SetShown(wrapOn and unlockOn)
         verticalCheckbox:SetShown(wrapOn and unlockOn)
-        utilitySection:SetContentHeight(wrapOn and (unlockOn and 315 or 225) or 135)
+        anchorLabel:ClearAllPoints()
+        local previous = wrapOn and (unlockOn and verticalCheckbox or unlockCheckbox) or wrapCheckbox
+        anchorLabel:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -15)
+        utilitySection:SetContentHeight(wrapOn and (unlockOn and 462 or 426) or 340)
     end
 
     wrapCheckbox = UI.CreateModernCheckbox(
@@ -196,11 +199,6 @@ local function CreateLayoutTab(page, tabId)
     )
     unlockCheckbox:SetPoint("TOPLEFT", utilWrapSlider, "BOTTOMLEFT", 0, -10)
 
-    xOffsetSlider = UI.CreateModernSlider(utility, L["Utility X Offset"], -600, 600, CDM.db.utilityXOffset, function(v)
-        CDM.db.utilityXOffset = v; API:Refresh("LAYOUT")
-    end)
-    xOffsetSlider:SetPoint("TOPLEFT", unlockCheckbox, "BOTTOMLEFT", 0, -10)
-
     verticalCheckbox = UI.CreateModernCheckbox(
         utility,
         L["Display Vertical"],
@@ -211,7 +209,51 @@ local function CreateLayoutTab(page, tabId)
             API:Refresh("LAYOUT")
         end
     )
-    verticalCheckbox:SetPoint("TOPLEFT", xOffsetSlider, "BOTTOMLEFT", 0, -10)
+    verticalCheckbox:SetPoint("TOPLEFT", unlockCheckbox, "BOTTOMLEFT", 0, -10)
+
+    anchorLabel = UI.CreateHeader(utility, L["Anchor"])
+
+    local anchorToLabel = utility:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    anchorToLabel:SetText(L["Anchor To"])
+    anchorToLabel:SetPoint("TOPLEFT", anchorLabel, "BOTTOMLEFT", 0, -14)
+
+    local anchorOptions = {
+        { value = "essential", label = L["Essential Viewer"] },
+        { value = "screen", label = L["Screen"] },
+    }
+    local anchorDropdown = UI.CreateDropdown(utility)
+    anchorDropdown:SetPoint("TOPLEFT", anchorToLabel, "BOTTOMLEFT", 0, -5)
+    anchorDropdown:SetSize(200, 26)
+    anchorDropdown:SetDefaultText(UI.GetOptionLabel(anchorOptions, CDM.db.utilityAnchor))
+    UI.SetupValueDropdown(anchorDropdown, anchorOptions,
+        function() return CDM.db.utilityAnchor end,
+        function(value, label)
+            CDM.db.utilityAnchor = value
+            anchorDropdown:SetDefaultText(label)
+            API:Refresh("LAYOUT")
+        end)
+
+    local xOffsetSlider = UI.CreateModernSlider(utility, L["Utility X Offset"], -600, 600, CDM.db.utilityXOffset, function(v)
+        CDM.db.utilityXOffset = v; API:Refresh("LAYOUT")
+    end)
+    xOffsetSlider:SetPoint("TOPLEFT", anchorDropdown, "BOTTOMLEFT", 0, -15)
+
+    local yOffsetSlider = UI.CreateModernSlider(utility, L["Y Offset"], -600, 600, CDM.db.utilityYOffset, function(v)
+        CDM.db.utilityYOffset = v; API:Refresh("LAYOUT")
+    end)
+    yOffsetSlider:SetPoint("TOPLEFT", xOffsetSlider, "BOTTOMLEFT", 0, -10)
+
+    local function UpdateAnchorOffsets(x, y)
+        xOffsetSlider:UpdateUIValue(x)
+        yOffsetSlider:UpdateUIValue(y)
+    end
+    if ns.RegisterAnchorPositionUpdater then
+        ns.RegisterAnchorPositionUpdater("utility", UpdateAnchorOffsets)
+    end
+    utility:HookScript("OnShow", function()
+        anchorDropdown:SetDefaultText(UI.GetOptionLabel(anchorOptions, CDM.db.utilityAnchor))
+        UpdateAnchorOffsets(CDM.db.utilityXOffset, CDM.db.utilityYOffset)
+    end)
 
     UpdateUnlockControls()
     generalPage:HookScript("OnShow", UpdateScrollHeight)

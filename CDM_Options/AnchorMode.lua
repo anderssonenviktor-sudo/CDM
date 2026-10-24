@@ -395,6 +395,122 @@ local function AddBuffBarGroupEntries()
     end
 end
 
+local function GetAutoBarWidth(entry)
+    if entry.key == "cast_bar" and CDM.db.castBarAutoWidthSource == "utility"
+        and CDM:GetUtilityVisibleCount() > 0 then
+        return CDM:GetUtilityContentWidth()
+    end
+    local width = CDM.CalculateEssentialRow1Width and CDM.CalculateEssentialRow1Width() or 200
+    return width > 0 and width or 200
+end
+
+local function ConfigureEntrySize(entry)
+    local key = entry.key
+    local sizeKeys
+    if key == "essential" then
+        sizeKeys = { "sizeEssRow1" }
+        local count = 0
+        local frames = CDM.ungroupedAnchorFrames and CDM.ungroupedAnchorFrames[VIEWERS.ESSENTIAL]
+        for _ in pairs(frames or {}) do count = count + 1 end
+        if count > (CDM.db.maxRowEss or 9) then
+            sizeKeys[2] = "sizeEssRow2"
+        end
+    elseif key == "utility" then
+        sizeKeys = { "sizeUtility" }
+    elseif key == "buff" then
+        sizeKeys = { "sizeBuff" }
+    end
+
+    local items, widthKey, heightKey, defaultWidth, defaultHeight
+    local groupIndex = tonumber(key:match("^cooldown_group_(%d+)$"))
+    local buffIndex = tonumber(key:match("^buff_group_(%d+)$"))
+    local barIndex = tonumber(key:match("^buff_bar_group_(%d+)$"))
+    local resourceKey = key:match("^resource_(.+)$")
+    if sizeKeys then
+        entry.sizeLimits = { width = { 20, 100 }, height = { 20, 100 } }
+        entry.refreshSize = function() CDM:Refresh("LAYOUT") end
+        entry.readSize = function(axis)
+            local field = axis == "width" and "w" or "h"
+            local value = CDM.db[sizeKeys[1]][field]
+            for i = 2, #sizeKeys do
+                if CDM.db[sizeKeys[i]][field] ~= value then return nil end
+            end
+            return value
+        end
+        entry.writeSize = function(axis, value)
+            local field = axis == "width" and "w" or "h"
+            for _, sizeKey in ipairs(sizeKeys) do
+                -- Defaults may be inherited; replace the size instead of mutating it.
+                local current = CDM.db[sizeKey]
+                local updated = { w = current.w, h = current.h }
+                updated[field] = value
+                CDM.db[sizeKey] = updated
+            end
+        end
+        return
+    elseif groupIndex or buffIndex then
+        local sets = groupIndex and CDM.CooldownGroupSets or CDM.BuffGroupSets
+        items = { sets.groups[groupIndex or buffIndex] }
+        widthKey, heightKey = "iconWidth", "iconHeight"
+        defaultWidth, defaultHeight = 30, 30
+        entry.sizeLimits = { width = { 16, 100 }, height = { 16, 100 } }
+        entry.refreshSize = function() CDM:Refresh(groupIndex and "CD_DATA" or "BUFF_DATA") end
+    elseif key == "buff_bar" or barIndex then
+        if barIndex then
+            items = CDM.buffBarGroupSets.groups[barIndex].bars
+        else
+            items = CDM.BUFFBAR.GetUngrouped()
+        end
+        if not items or #items == 0 then return end
+        widthKey, heightKey = "width", "height"
+        defaultWidth, defaultHeight = 0, 20
+        entry.sizeLimits = { width = { 60, 600 }, height = { 4, 40 } }
+        entry.autoWidth = true
+        entry.refreshSize = function()
+            CDM.InvalidateBuffBarEntries()
+            CDM:Refresh("BUFF_DATA", "STYLE", "LAYOUT")
+        end
+    elseif key == "cast_bar" then
+        items = { CDM.db }
+        widthKey, heightKey = "castBarWidth", "castBarHeight"
+        defaultWidth, defaultHeight = 300, 20
+        entry.sizeLimits = { width = { 60, 1000 }, height = { 8, 50 } }
+        entry.autoWidth = true
+        entry.refreshSize = function() CDM:Refresh("STYLE") end
+    elseif resourceKey then
+        entry.sizeLimits = { width = { 60, 600 }, height = { 4, 40 } }
+        entry.autoWidth = true
+        entry.readSize = function(axis)
+            local value = CDM:GetBarSetting(resourceKey, axis) or (axis == "width" and 0 or 16)
+            return axis == "width" and value == 0 and GetAutoBarWidth(entry) or value
+        end
+        entry.writeSize = function(axis, value) CDM:SetBarSetting(resourceKey, axis, value) end
+        entry.refreshSize = function() CDM:Refresh("RESOURCES", "LAYOUT") end
+        return
+    else
+        return
+    end
+
+    entry.readSize = function(axis)
+        local field = axis == "width" and widthKey or heightKey
+        local fallback = axis == "width" and defaultWidth or defaultHeight
+        local value
+        for i, item in ipairs(items) do
+            local current = item[field] or fallback
+            if axis == "width" and entry.autoWidth and current == 0 then
+                current = GetAutoBarWidth(entry)
+            end
+            if i > 1 and current ~= value then return nil end
+            value = current
+        end
+        return value
+    end
+    entry.writeSize = function(axis, value)
+        local field = axis == "width" and widthKey or heightKey
+        for _, item in ipairs(items) do item[field] = value end
+    end
+end
+
 local function BuildEntries()
     for i = #AnchorMode.entries, 1, -1 do
         AnchorMode.entries[i] = nil
@@ -408,6 +524,7 @@ local function BuildEntries()
     AddGroupEntries("buff_group_", L["Buff Group"], CDM.buffGroupContainers, CDM.BuffGroupSets,
         function() CDM:UpdateAllBuffGroupContainers() end, CDM.buffGroupFrames, true)
     AddBuffBarGroupEntries()
+    for _, entry in ipairs(AnchorMode.entries) do ConfigureEntrySize(entry) end
 end
 
 local dragging
@@ -553,7 +670,14 @@ local function CreateAnchorBanner()
     banner:SetSize(230, 30)
     banner:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
     banner:SetFrameStrata("TOOLTIP")
-    banner:SetFrameLevel(10001)
+    -- Leave room above the toolbar for its panel and interactive children.
+    banner:SetFrameLevel(100)
+    banner:SetClampedToScreen(true)
+    banner:SetMovable(true)
+    banner:EnableMouse(true)
+    banner:RegisterForDrag("LeftButton")
+    banner:SetScript("OnDragStart", banner.StartMoving)
+    banner:SetScript("OnDragStop", banner.StopMovingOrSizing)
     banner:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -595,6 +719,9 @@ local function RefreshOverlaySelection()
 end
 
 local function SelectEntry(entry)
+    if nudgePanel then
+        for _, box in ipairs(nudgePanel.boxes) do box:ClearFocus() end
+    end
     AnchorMode.selectedEntry = entry
     RefreshOverlaySelection()
     if UpdateNudgePanel then UpdateNudgePanel() end
@@ -610,7 +737,8 @@ end
 
 local keyboardHandler = CreateFrame("Frame", "CDM_AnchorKeyboardHandler", UIParent)
 keyboardHandler:SetFrameStrata("TOOLTIP")
-keyboardHandler:SetFrameLevel(10000)
+keyboardHandler:SetFrameLevel(90)
+keyboardHandler:EnableMouse(false)
 keyboardHandler:EnableKeyboard(true)
 keyboardHandler:SetPropagateKeyboardInput(true)
 keyboardHandler:Hide()
@@ -623,16 +751,15 @@ local KEYBOARD_NUDGES = {
 }
 
 keyboardHandler:SetScript("OnKeyDown", function(self, key)
+    if GetCurrentKeyBoardFocus() then
+        self:SetPropagateKeyboardInput(true)
+        return
+    end
     if key == "ESCAPE" then
         AnchorMode:Exit(true)
         self:SetPropagateKeyboardInput(false)
         return
     end
-    if GetCurrentKeyBoardFocus() then
-        self:SetPropagateKeyboardInput(true)
-        return
-    end
-
     local delta = KEYBOARD_NUDGES[key]
     if delta and AnchorMode.selectedEntry then
         self:SetPropagateKeyboardInput(false)
@@ -646,17 +773,14 @@ end)
 local function CreateNudgePanel()
     if nudgePanel then return nudgePanel end
 
-    local panel = CreateFrame("Frame", "CDM_AnchorNudgeTool", UIParent, "BackdropTemplate")
-    panel:SetSize(180, 126)
-    panel:SetPoint("CENTER", UIParent, "CENTER", 260, 0)
+    local banner = CreateAnchorBanner()
+    local panel = CreateFrame("Frame", "CDM_AnchorNudgeTool", banner, "BackdropTemplate")
+    panel:SetSize(230, 182)
+    panel:SetPoint("TOP", banner, "BOTTOM", 0, 1)
     panel:SetFrameStrata("TOOLTIP")
-    panel:SetFrameLevel(100)
-    panel:SetClampedToScreen(true)
-    panel:SetMovable(true)
+    panel:SetFrameLevel(banner:GetFrameLevel() + 1)
+    banner:SetClampRectInsets(0, 0, 0, -181)
     panel:EnableMouse(true)
-    panel:RegisterForDrag("LeftButton")
-    panel:SetScript("OnDragStart", panel.StartMoving)
-    panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
     panel:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -667,16 +791,19 @@ local function CreateNudgePanel()
 
     local selected = panel:CreateFontString(nil, "OVERLAY", "CDM_Font12")
     selected:SetPoint("TOP", 0, -7)
+    selected:SetWidth(210)
+    selected:SetWordWrap(false)
     selected:SetFontObject("CDM_Font18")
     selected:SetTextColor(GOLD[1], GOLD[2], GOLD[3], 1)
     panel.selected = selected
 
-    local function CreateOffsetBox(labelText, y)
+    local function CreateValueBox(labelText, y)
         local label = panel:CreateFontString(nil, "OVERLAY", "CDM_Font14")
         label:SetPoint("TOPLEFT", 14, y)
         label:SetText(labelText)
 
         local box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+        box:SetFrameLevel(panel:GetFrameLevel() + 1)
         box:SetSize(76, 22)
         box:SetPoint("TOPRIGHT", -14, y + 4)
         box:SetAutoFocus(false)
@@ -685,38 +812,72 @@ local function CreateNudgePanel()
         return box
     end
 
-    panel.xBox = CreateOffsetBox(L["X Offset"], -36)
-    panel.yBox = CreateOffsetBox(L["Y Offset"], -64)
+    panel.xBox = CreateValueBox(L["X Offset"], -36)
+    panel.yBox = CreateValueBox(L["Y Offset"], -64)
+    panel.widthBox = CreateValueBox(L["Width"], -92)
+    panel.heightBox = CreateValueBox(L["Height"], -120)
+    panel.widthBox.axis = "width"
+    panel.heightBox.axis = "height"
+    panel.sizeBoxes = { panel.widthBox, panel.heightBox }
+    panel.boxes = { panel.xBox, panel.yBox, panel.widthBox, panel.heightBox }
 
-    local function CommitBoxes()
-        if panel.updating or panel.committing then return end
+    local function CommitBox(box)
+        if panel.updating or panel.committing or not box.dirty then return end
+        box.dirty = false
         local entry = AnchorMode.selectedEntry
-        local x = tonumber(panel.xBox:GetText())
-        local y = tonumber(panel.yBox:GetText())
-        if entry and x and y and not InCombatLockdown() then
-            ApplyEntryOffsets(entry, x, y, true)
-        elseif UpdateNudgePanel then
-            UpdateNudgePanel()
+        local value = tonumber(box:GetText())
+        if entry and value and value == value and math_abs(value) < math.huge and not InCombatLockdown() then
+            if box.axis and entry.writeSize then
+                local limits = entry.sizeLimits[box.axis]
+                value = math_floor(value + 0.5)
+                if not (box.axis == "width" and entry.autoWidth and value == 0) then
+                    value = math.max(limits[1], math.min(limits[2], value))
+                end
+                entry.writeSize(box.axis, value)
+                entry.refreshSize()
+                C_Timer.After(0, function()
+                    if AnchorMode.active then UpdateNudgePanel() end
+                end)
+            elseif not box.axis then
+                local x, y = entry.getOffsets()
+                if box == panel.xBox then x = value else y = value end
+                ApplyEntryOffsets(entry, x, y, true)
+            end
         end
+        UpdateNudgePanel()
     end
 
     local function OnEnterPressed(self)
-        CommitBoxes()
+        CommitBox(self)
         panel.committing = true
         self:ClearFocus()
         panel.committing = false
+        UpdateNudgePanel()
     end
 
     local function OnEscapePressed(self)
-        if UpdateNudgePanel then UpdateNudgePanel() end
+        self.dirty = false
         self:ClearFocus()
+        UpdateNudgePanel()
     end
 
-    for _, box in ipairs({ panel.xBox, panel.yBox }) do
+    for _, box in ipairs(panel.boxes) do
+        box:SetScript("OnTextChanged", function(self, userInput)
+            if userInput and not panel.updating then self.dirty = true end
+        end)
         box:SetScript("OnEnterPressed", OnEnterPressed)
         box:SetScript("OnEscapePressed", OnEscapePressed)
-        box:SetScript("OnEditFocusLost", CommitBoxes)
+        box:SetScript("OnEditFocusLost", CommitBox)
     end
+    panel.widthBox:SetScript("OnEnter", function(self)
+        local entry = AnchorMode.selectedEntry
+        if not entry or not entry.autoWidth then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Width (0 = Auto)"])
+        GameTooltip:AddLine(L["Automatic width shows its current size. Enter 0 to restore automatic width."], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    panel.widthBox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     local arrows = {
         { rotation = -90, dx = -1, dy = 0 },
@@ -755,23 +916,33 @@ UpdateNudgePanel = function()
     if not panel then return end
     local entry = AnchorMode.selectedEntry
     panel.updating = true
+    local function UpdateBox(box, value, enabled)
+        -- Committing one field can refresh the panel after another gains focus.
+        if box:HasFocus() then return end
+        box:SetText(value)
+        if enabled then box:Enable() else box:Disable() end
+    end
+    for _, box in ipairs(panel.sizeBoxes) do
+        if entry and entry.readSize then
+            local value = entry.readSize(box.axis)
+            UpdateBox(box, value and math_floor(value + 0.5) or L["Mixed"], true)
+        else
+            UpdateBox(box, "--", false)
+        end
+    end
     if entry then
         local x, y = entry.getOffsets()
         panel.selected:SetText(entry.label)
-        panel.xBox:SetText(math_floor((x or 0) + 0.5))
-        panel.yBox:SetText(math_floor((y or 0) + 0.5))
-        panel.xBox:Enable()
-        panel.yBox:Enable()
+        UpdateBox(panel.xBox, math_floor((x or 0) + 0.5), true)
+        UpdateBox(panel.yBox, math_floor((y or 0) + 0.5), true)
         for _, button in ipairs(panel.arrows) do
             button:Enable()
             button:SetAlpha(1)
         end
     else
         panel.selected:SetText(L["Select Anchor"])
-        panel.xBox:SetText("--")
-        panel.yBox:SetText("--")
-        panel.xBox:Disable()
-        panel.yBox:Disable()
+        UpdateBox(panel.xBox, "--", false)
+        UpdateBox(panel.yBox, "--", false)
         for _, button in ipairs(panel.arrows) do
             button:Disable()
             button:SetAlpha(0.35)
@@ -881,6 +1052,9 @@ end
 
 function AnchorMode:Exit(reopenConfig)
     if not self.active then return end
+    if nudgePanel then
+        for _, box in ipairs(nudgePanel.boxes) do box:ClearFocus() end
+    end
     self.active = false
     if self.entryTimer then
         self.entryTimer:Cancel()

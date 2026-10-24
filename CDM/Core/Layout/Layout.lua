@@ -64,7 +64,7 @@ local function GetLayoutConfig()
     local utilityUnlock = utilityWrap and GetConfigValue("utilityUnlock", df.utilityUnlock)
     local maxRowUtil = utilityWrap and GetConfigValue("maxRowUtil", df.maxRowUtil) or 0
     local utilVertical = utilityUnlock and GetConfigValue("utilityVertical", df.utilityVertical) or false
-    local utilityXOffset = utilityUnlock and GetConfigValue("utilityXOffset", df.utilityXOffset) or 0
+    local utilityXOffset = GetConfigValue("utilityXOffset", df.utilityXOffset) or 0
     return GetConfigValue("sizeEssRow1", df.sizeEssRow1) or DEFAULT_SIZE_ESS,
         GetConfigValue("sizeEssRow2", df.sizeEssRow2) or DEFAULT_SIZE_ESS,
         GetConfigValue("sizeUtility", df.sizeUtility) or DEFAULT_SIZE_ESS,
@@ -419,6 +419,11 @@ function CDM:GetUtilityVisibleCount()
 end
 
 local function SetUtilityAnchor(utilContainer, essContainer, utilHalfW, utilityXOffset, utilityYOffset, spacing)
+    if GetConfigValue("utilityAnchor", "essential") == "screen" then
+        Pixel.SetPoint(utilContainer, "TOPLEFT", UIParent, "CENTER", utilityXOffset - utilHalfW, utilityYOffset)
+        return
+    end
+    if not essContainer then return end
     local essHalfW = HalfFloor(essContainer:GetWidth() or 0)
     Pixel.SetPoint(utilContainer, "TOPLEFT", essContainer, "BOTTOMLEFT", essHalfW - utilHalfW + utilityXOffset, -spacing + utilityYOffset)
 end
@@ -463,22 +468,8 @@ function CDM:UpdateUtilityContainerPosition()
         return
     end
 
-    local essContainer = self.anchorContainers[VIEWERS.ESSENTIAL]
-    local utilContainer = self.anchorContainers[VIEWERS.UTILITY]
-    local _, _, sizeUtility, _, spacing, _, utilityYOffset, maxRowUtil, utilityVertical, utilityXOffset = GetLayoutConfig()
-
-    if not essContainer or not utilContainer then return end
-
-    local utilityCount = GetUtilityVisibleCount()
-
-    local containerWidth, containerHeight = ComputeUtilityContainerSize(
-        utilityCount > 0 and utilityCount or 0, sizeUtility, spacing, maxRowUtil, utilityVertical
-    )
-    utilContainer:SetSize(Snap(containerWidth), Snap(containerHeight))
-
-    local utilHalfW = HalfFloor(Snap(containerWidth))
-    utilContainer:ClearAllPoints()
-    SetUtilityAnchor(utilContainer, essContainer, utilHalfW, utilityXOffset, utilityYOffset, spacing)
+    -- Icon layout owns the size; the viewer pool also includes grouped icons.
+    self:ReanchorContainer(VIEWERS.UTILITY)
 end
 
 local FALLBACK_POSITION = {
@@ -587,7 +578,6 @@ function CDM:ReanchorContainer(vName)
         AnchorMainLayoutContainer(container, false, savedPos.point, savedPos.x, savedPos.y)
     elseif vName == VIEWERS.UTILITY then
         local essContainer = self.anchorContainers[VIEWERS.ESSENTIAL]
-        if not essContainer then return end
         local _, _, _, _, spacing, _, utilityYOffset, _, _, utilityXOffset = GetLayoutConfig()
         local utilHalfW = HalfFloor(container:GetWidth())
         container:ClearAllPoints()
@@ -734,7 +724,7 @@ local function CreateBaseContainer(name)
 end
 
 function CDM:GetOrCreateAnchorContainer(viewer)
-    local sizeEssRow1, _, _, sizeBuff = GetLayoutConfig()
+    local sizeEssRow1, _, sizeUtility, sizeBuff = GetLayoutConfig()
     local vName = viewer:GetName()
 
     if self.anchorContainers[vName] then
@@ -803,6 +793,7 @@ function CDM:GetOrCreateAnchorContainer(viewer)
         self:UpdateEditModeSelectionOverlay(vName)
 
         if vName == VIEWERS.UTILITY then
+            container:SetSize(Snap(sizeUtility.w), Snap(sizeUtility.h))
             self:UpdateUtilityContainerPosition()
         end
 

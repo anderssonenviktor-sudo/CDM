@@ -169,6 +169,11 @@ local function CreateCastBarTab(page, tabId)
         dimensionsSection:SetContentHeight(isAuto and 135 or 100)
     end
     page.UpdateAutoWidthLayout()
+    page:HookScript("OnShow", function()
+        page.controls.castBarWidthSlider:UpdateUIValue(CDM.db.castBarWidth or 300)
+        page.controls.castBarHeightSlider:UpdateUIValue(CDM.db.castBarHeight or 20)
+        page.UpdateAutoWidthLayout()
+    end)
 
     local _, iconContent = CollapsibleSection("icon", L["Spell Icon"], 160)
 
