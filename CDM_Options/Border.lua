@@ -52,28 +52,74 @@ local function OutlineDropdown(rc, yOff, page)
     page.outlineDropdown = dd
 end
 
+local stylingExpanded = { font = true }
+
 local function BuildBorders(subPage, page)
-    local content = CreateFrame("Frame", nil, subPage)
-    content:SetPoint("TOPLEFT", 35, -40)
-    content:SetPoint("BOTTOMRIGHT", -20, 10)
+    local content, scrollFrame = UI.CreateScrollableTab(subPage, "CDM_StylingScrollFrame", 520)
+    local scrollChild = scrollFrame:GetScrollChild()
+    local sections = {}
 
-    local left = CreateFrame("Frame", nil, content)
-    left:SetPoint("TOPLEFT")
-    left:SetSize(260, 600)
-    local right = CreateFrame("Frame", nil, content)
-    right:SetPoint("TOPLEFT", 290, 0)
-    right:SetSize(260, 600)
+    local function UpdateScrollHeight()
+        local height = 40
+        for i, section in ipairs(sections) do
+            height = height + section:GetHeight()
+            if i > 1 then height = height + 14 end
+        end
+        content:SetHeight(height - 20)
+        scrollChild:SetHeight(height)
+    end
 
-    local fontHeader = UI.CreateHeader(left, L["Global Font"])
-    fontHeader:SetPoint("TOPLEFT", 0, 0)
-    FontDropdown(left, -30, page)
-    OutlineDropdown(left, -85, page)
+    local function CollapsibleSection(key, label, contentHeight)
+        local section = CreateFrame("Frame", nil, content)
+        section:SetWidth(520)
+        local previous = sections[#sections]
+        if previous then
+            section:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -14)
+        else
+            section:SetPoint("TOPLEFT")
+        end
 
-    local rc = left
-    local yOff = -150
+        local header = CreateFrame("Button", nil, section)
+        header:SetPoint("TOPLEFT")
+        header:SetSize(520, 24)
+        local arrow = header:CreateTexture(nil, "ARTWORK")
+        arrow:SetTexture("Interface\\AddOns\\CDM\\Media\\Textures\\collapse")
+        arrow:SetPoint("LEFT")
+        arrow:SetSize(14, 14)
+        arrow:SetVertexColor(1, 0.82, 0, 1)
+        local title = UI.CreateHeader(header, label)
+        title:ClearAllPoints()
+        title:SetPoint("LEFT", arrow, "RIGHT", 8, 0)
+        local highlight = header:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(1, 0.82, 0, 0.08)
 
-    local borderHeader = UI.CreateHeader(rc, L["Border Settings"])
-    borderHeader:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 30
+        local body = CreateFrame("Frame", nil, section)
+        body:SetPoint("TOPLEFT", 0, -30)
+        body:SetSize(520, contentHeight)
+        local function UpdateSection()
+            local expanded = stylingExpanded[key] == true
+            body:SetShown(expanded)
+            arrow:SetRotation(expanded and 0 or math.pi / 2)
+            section:SetHeight(expanded and (30 + contentHeight) or 24)
+            UpdateScrollHeight()
+        end
+        header:SetScript("OnClick", function()
+            stylingExpanded[key] = not stylingExpanded[key]
+            UI.CloseAllDropdownMenus()
+            UpdateSection()
+        end)
+        sections[#sections + 1] = section
+        UpdateSection()
+        return body
+    end
+
+    local font = CollapsibleSection("font", L["Global Font"], 120)
+    FontDropdown(font, 0, page)
+    OutlineDropdown(font, -55, page)
+
+    local rc = CollapsibleSection("border", L["Border Settings"], 290)
+    local yOff = 0
 
     local lblDropdown = rc:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     lblDropdown:SetText(L["Border Texture"])
@@ -102,19 +148,19 @@ local function BuildBorders(subPage, page)
     colorPicker:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 45
     page.colorPicker = colorPicker
 
-    page.controls.b0 = UI.CreateModernSlider(rc, L["Border Size"], 1, 50, CDM.db.borderSize, function(v) CDM.db.borderSize = v; API:Refresh("STYLE") end, 110, 145)
+    page.controls.b0 = UI.CreateModernSlider(rc, L["Border Size"], 1, 50, CDM.db.borderSize, function(v) CDM.db.borderSize = v; API:Refresh("STYLE") end)
     page.controls.b0:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 60
 
-    page.controls.b1 = UI.CreateModernSlider(rc, L["Border Offset X"], -50, 50, CDM.db.borderOffsetX, function(v) CDM.db.borderOffsetX = v; API:Refresh("STYLE") end, 110, 145)
+    page.controls.b1 = UI.CreateModernSlider(rc, L["Border Offset X"], -50, 50, CDM.db.borderOffsetX, function(v) CDM.db.borderOffsetX = v; API:Refresh("STYLE") end)
     page.controls.b1:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 60
 
-    page.controls.b2 = UI.CreateModernSlider(rc, L["Border Offset Y"], -50, 50, CDM.db.borderOffsetY, function(v) CDM.db.borderOffsetY = v; API:Refresh("STYLE") end, 110, 145)
+    page.controls.b2 = UI.CreateModernSlider(rc, L["Border Offset Y"], -50, 50, CDM.db.borderOffsetY, function(v) CDM.db.borderOffsetY = v; API:Refresh("STYLE") end)
     page.controls.b2:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 60
 
-    local assist = CreateFrame("Frame", nil, right)
-    assist:SetPoint("TOPLEFT", 0, 0)
-    assist:SetSize(260, 500)
-    ns._CreateAssistPanel(assist, page)
+    local pressOverlay = CollapsibleSection("pressOverlay", L["Press Overlay"], 110)
+    local keybindings = CollapsibleSection("keybindings", L["Keybindings"], 350)
+    ns._CreateAssistPanel(pressOverlay, keybindings, page)
+    subPage:HookScript("OnShow", UpdateScrollHeight)
 end
 
 local function CreateBorderTab(page)

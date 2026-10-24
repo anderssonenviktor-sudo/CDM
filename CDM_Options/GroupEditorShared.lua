@@ -115,14 +115,6 @@ function Shared.CreateArrowButton(parent, direction, size, iconScale)
     return btn
 end
 
-function Shared.ApplyRemoveButtonText(btn)
-    local text = btn:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-    text:SetPoint("CENTER")
-    text:SetText("|cffff4444X|r")
-    btn:SetFontString(text)
-    return text
-end
-
 function Shared.IsUsableSpellID(spellID)
     return API.IsSafeNumber(spellID) and spellID > 0 and spellID == math.floor(spellID)
 end
@@ -310,6 +302,7 @@ function Shared.CreateRightPanelManager(rightPanel, placeholder, destroyFrame)
             Reset(false)
 
             local sf = CreateFrame("ScrollFrame", nil, rightPanel, "ScrollFrameTemplate")
+            UI.StyleScrollBar(sf)
             sf:SetAllPoints()
             sf:Show()
             sf:HookScript("OnVerticalScroll", CloseDropdownMenus)
@@ -658,9 +651,7 @@ function Shared.CreateExpandableHeader(parent, yOff, isExpanded, displayName, is
     deleteBtn:SetSize(HEADER_DELETE_BTN_SIZE, HEADER_DELETE_BTN_SIZE)
     deleteBtn:SetPoint("RIGHT", 0, 1)
     deleteBtn:SetFrameLevel(row:GetFrameLevel() + 2)
-    deleteBtn:SetNormalAtlas("128-RedButton-Exit")
-    deleteBtn:SetPushedAtlas("128-RedButton-Exit-Pressed")
-    deleteBtn:SetHighlightAtlas("128-RedButton-Exit-Highlight")
+    UI.ApplyCrossIcon(deleteBtn)
 
     local selectBtn = CreateFrame("Button", nil, row)
     selectBtn:SetPoint("TOPLEFT", 0, 0)
@@ -1263,7 +1254,7 @@ function Shared.CreateGroupEditorPools(parent, config)
         removeBtn:SetSize(16, 16)
         removeBtn:SetPoint("RIGHT", -6, 0)
         removeBtn:SetFrameLevel(row:GetFrameLevel() + 2)
-        local removeBtnText = Shared.ApplyRemoveButtonText(removeBtn)
+        local removeBtnIcon = UI.ApplyCrossIcon(removeBtn)
 
         local nameText = row:CreateFontString(nil, "OVERLAY", "CDM_Font12")
         nameText:SetJustifyH("LEFT")
@@ -1280,7 +1271,7 @@ function Shared.CreateGroupEditorPools(parent, config)
             iconContainer = iconContainer,
             iconTex = iconTex,
             removeBtn = removeBtn,
-            removeBtnText = removeBtnText,
+            removeBtnIcon = removeBtnIcon,
             nameText = nameText,
             clickBtn = clickBtn,
         }

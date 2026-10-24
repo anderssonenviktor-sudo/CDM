@@ -270,6 +270,7 @@ local function CreateResourcesTab(page, tabId)
     page.controls.resourcesEnabled:SetPoint("TOPLEFT", 1, -40)
 
     local leftScroll = CreateFrame("ScrollFrame", nil, page, "ScrollFrameTemplate")
+    UI.StyleScrollBar(leftScroll)
     leftScroll:SetPoint("TOPLEFT", LEFT_INSET - SCROLL_LEFT_PAD, -92)
     leftScroll:SetPoint("BOTTOMLEFT", LEFT_INSET - SCROLL_LEFT_PAD, 20)
     leftScroll:SetWidth(LEFT_WIDTH + SCROLL_LEFT_PAD)

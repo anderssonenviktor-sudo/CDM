@@ -6,7 +6,7 @@ local CDM = Runtime
 local UI = ns.ConfigUI
 local L = Runtime.L
 
-local castBarExpanded = {}
+local castBarExpanded = { dimensions = true }
 
 local function CreateCastBarTab(page, tabId)
     local scrollChild, scrollFrame = UI.CreateScrollableTab(page, "CDM_CastBarScrollFrame", 700, 650)

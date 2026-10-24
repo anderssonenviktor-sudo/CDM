@@ -311,9 +311,9 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
         if registerDropdown then registerDropdown(toggleDD) end
     end
 
-    local deleteBtn = UI.CreateTextButton(row)
+    local deleteBtn = CreateFrame("Button", nil, row)
     deleteBtn:SetSize(20, 20)
-    deleteBtn:SetText("X")
+    UI.ApplyCrossIcon(deleteBtn)
     deleteBtn:SetPoint("RIGHT", 2, 0)
     row.deleteBtn = deleteBtn
 

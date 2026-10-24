@@ -1120,7 +1120,7 @@ local function CreateBarsTab(page)
             delBtn:SetSize(16, 16)
             delBtn:SetPoint("TOPRIGHT", -5, -(1 + (TILE_HEADER_H - 16) / 2))
             delBtn:SetFrameLevel(tile:GetFrameLevel() + 4)
-            Shared.ApplyRemoveButtonText(delBtn)
+            UI.ApplyCrossIcon(delBtn)
             tile.delBtn = delBtn
 
             tile.icons = {}

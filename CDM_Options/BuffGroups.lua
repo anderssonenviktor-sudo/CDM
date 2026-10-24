@@ -386,6 +386,7 @@ local function CreateBuffGroupsPanel(page, tabPage)
     end
 
     local leftScroll = CreateFrame("ScrollFrame", "CDM_BuffGroupsLeftScroll", page, "ScrollFrameTemplate")
+    UI.StyleScrollBar(leftScroll)
     leftScroll:SetPoint("TOPLEFT", buttonRow, "BOTTOMLEFT", -SCROLL_LEFT_PAD, -4)
     leftScroll:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", LEFT_INSET - SCROLL_LEFT_PAD, 20)
     leftScroll:SetWidth(LEFT_WIDTH + SCROLL_LEFT_PAD)
@@ -2416,13 +2417,18 @@ local function CreateBuffGroupsTab(page)
     UI.StyleDivider(divider)
     divider:SetPoint("TOP", generalPage, "TOP", 0, 0)
 
-    local content = UI.CreateScrollableTab(generalPage, "CDM_BuffGeneralScrollFrame", 180)
+    local content = UI.CreateScrollableTab(generalPage, "CDM_BuffGeneralScrollFrame", 240)
     local header = UI.CreateHeader(content, L["Buff"])
     header:SetPoint("TOPLEFT", 0, 0)
     local width = ns.CreateIconSizeSlider(content, L["Width"], "sizeBuff", "w")
     width:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -15)
     local height = ns.CreateIconSizeSlider(content, L["Height"], "sizeBuff", "h")
     height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, -10)
+    local spacing = UI.CreateModernSlider(content, L["Icon Spacing"], -1, 30, CDM.db.spacing, function(v)
+        CDM.db.spacing = v
+        API:Refresh("LAYOUT")
+    end)
+    spacing:SetPoint("TOPLEFT", height, "BOTTOMLEFT", 0, -10)
 end
 
 API:RegisterConfigTab("buffgroups", L["Buffs"], CreateBuffGroupsTab, 8)

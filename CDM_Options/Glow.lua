@@ -344,7 +344,7 @@ local function CreateGlowPreview(page, anchor, pandemic)
     icon:SetPoint("CENTER", anchor, "LEFT", 320, 0)
     local texture = icon:CreateTexture(nil, "ARTWORK")
     texture:SetAllPoints()
-    texture:SetTexture(134400)
+    texture:SetTexture(134376)
 
     local function Stop()
         CDM.Glow:RequestBuffGlow(icon, false)

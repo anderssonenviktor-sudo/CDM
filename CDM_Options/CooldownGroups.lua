@@ -588,6 +588,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     end
 
     local leftScroll = CreateFrame("ScrollFrame", "CDM_CDGroups_LeftScroll", subPage, "ScrollFrameTemplate")
+    UI.StyleScrollBar(leftScroll)
     leftScroll:SetPoint("TOPLEFT", buttonRow, "BOTTOMLEFT", -SCROLL_LEFT_PAD, -4)
     leftScroll:SetPoint("BOTTOMLEFT", subPage, "BOTTOMLEFT", LEFT_INSET - SCROLL_LEFT_PAD, 20)
     leftScroll:SetWidth(LEFT_WIDTH + SCROLL_LEFT_PAD)

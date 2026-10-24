@@ -7,14 +7,11 @@ local UI = ns.ConfigUI
 local L = Runtime.L
 
 
-local function CreateAssistPanel(scrollChild, page)
-
-    local poHeader = UI.CreateHeader(scrollChild, L["Press Overlay"])
-    poHeader:SetPoint("TOPLEFT", 0, 0)
+local function CreateAssistPanel(pressOverlay, keybindings, page)
 
     local setPOControlsEnabled
     page.controls.pressOverlayEnabled = UI.CreateModernCheckbox(
-        scrollChild,
+        pressOverlay,
         L["Enable Press Overlay"],
         CDM.db.pressOverlayEnabled or false,
         function(checked)
@@ -23,10 +20,10 @@ local function CreateAssistPanel(scrollChild, page)
             API:Refresh("STYLE")
         end
     )
-    page.controls.pressOverlayEnabled:SetPoint("TOPLEFT", poHeader, "BOTTOMLEFT", 0, -15)
+    page.controls.pressOverlayEnabled:SetPoint("TOPLEFT")
 
     page.controls.pressOverlayTint = UI.CreateModernCheckbox(
-        scrollChild,
+        pressOverlay,
         L["Color Tint"],
         CDM.db.pressOverlayTint or false,
         function(checked)
@@ -40,14 +37,14 @@ local function CreateAssistPanel(scrollChild, page)
     )
     page.controls.pressOverlayTint:SetPoint("TOPLEFT", page.controls.pressOverlayEnabled, "BOTTOMLEFT", 0, -10)
 
-    page.pressOverlayTintColorPicker = UI.CreateColorSwatch(scrollChild, L["Tint Color"], "pressOverlayTintColor", "STYLE")
+    page.pressOverlayTintColorPicker = UI.CreateColorSwatch(pressOverlay, L["Tint Color"], "pressOverlayTintColor", "STYLE")
     page.pressOverlayTintColorPicker:SetPoint("TOPLEFT", page.controls.pressOverlayTint, "BOTTOMLEFT", 0, -10)
 
     local poControls = {
         page.controls.pressOverlayTint, page.pressOverlayTintColorPicker,
     }
 
-    local poOverlay = CreateFrame("Frame", nil, scrollChild)
+    local poOverlay = CreateFrame("Frame", nil, pressOverlay)
     poOverlay:SetPoint("TOPLEFT", page.controls.pressOverlayTint, "TOPLEFT")
     poOverlay:SetPoint("BOTTOMRIGHT", page.pressOverlayTintColorPicker, "BOTTOMRIGHT")
     local poMaxLevel = 0
@@ -68,12 +65,9 @@ local function CreateAssistPanel(scrollChild, page)
     end
     setPOControlsEnabled(CDM.db.pressOverlayEnabled or false)
     
-    local mainHeader = UI.CreateHeader(scrollChild, L["Keybindings"])
-    mainHeader:SetPoint("TOPLEFT", page.pressOverlayTintColorPicker, "BOTTOMLEFT", 0, -20)
-
     local setKBControlsEnabled
     page.controls.assistEnabled = UI.CreateModernCheckbox(
-        scrollChild,
+        keybindings,
         L["Enable Keybind Text"],
         CDM.db.assistEnabled or false,
         function(checked)
@@ -82,25 +76,25 @@ local function CreateAssistPanel(scrollChild, page)
             API:Refresh("STYLE")
         end
     )
-    page.controls.assistEnabled:SetPoint("TOPLEFT", mainHeader, "BOTTOMLEFT", 0, -15)
+    page.controls.assistEnabled:SetPoint("TOPLEFT")
 
     page.controls.assistFontSize = UI.CreateModernSlider(
-        scrollChild, L["Font Size"], 1, 30, CDM.db.assistFontSize or 15,
+        keybindings, L["Font Size"], 1, 30, CDM.db.assistFontSize or 15,
         function(v)
             CDM.db.assistFontSize = v
             API:Refresh("STYLE")
-        end, 110, 145
+        end
     )
     page.controls.assistFontSize:SetPoint("TOPLEFT", page.controls.assistEnabled, "BOTTOMLEFT", 0, -15)
 
-    page.assistColorPicker = UI.CreateColorSwatch(scrollChild, L["Color"], "assistColor", "STYLE")
+    page.assistColorPicker = UI.CreateColorSwatch(keybindings, L["Color"], "assistColor", "STYLE")
     page.assistColorPicker:SetPoint("TOPLEFT", page.controls.assistFontSize, "BOTTOMLEFT", 0, -15)
 
-    local lblPos = scrollChild:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    local lblPos = keybindings:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     lblPos:SetText(L["Position"])
     lblPos:SetPoint("TOPLEFT", page.assistColorPicker, "BOTTOMLEFT", 0, -15)
 
-    local ddPos = UI.CreateDropdown(scrollChild)
+    local ddPos = UI.CreateDropdown(keybindings)
     ddPos:SetPoint("TOPLEFT", lblPos, "BOTTOMLEFT", 0, -10)
     ddPos:SetWidth(180)
     ddPos:SetDefaultText(CDM.db.assistPosition or "TOPRIGHT")
@@ -117,20 +111,20 @@ local function CreateAssistPanel(scrollChild, page)
     )
 
     page.controls.assistOffsetX = UI.CreateModernSlider(
-        scrollChild, L["X Offset"], -20, 20, CDM.db.assistOffsetX or 0,
+        keybindings, L["X Offset"], -20, 20, CDM.db.assistOffsetX or 0,
         function(v)
             CDM.db.assistOffsetX = v
             API:Refresh("STYLE")
-        end, 110, 145
+        end
     )
     page.controls.assistOffsetX:SetPoint("TOPLEFT", ddPos, "BOTTOMLEFT", 0, -15)
 
     page.controls.assistOffsetY = UI.CreateModernSlider(
-        scrollChild, L["Y Offset"], -20, 20, CDM.db.assistOffsetY or 0,
+        keybindings, L["Y Offset"], -20, 20, CDM.db.assistOffsetY or 0,
         function(v)
             CDM.db.assistOffsetY = v
             API:Refresh("STYLE")
-        end, 110, 145
+        end
     )
     page.controls.assistOffsetY:SetPoint("TOPLEFT", page.controls.assistOffsetX, "BOTTOMLEFT", 0, -15)
 
@@ -140,7 +134,7 @@ local function CreateAssistPanel(scrollChild, page)
     }
     local kbRegions = { lblPos }
 
-    local kbOverlay = CreateFrame("Frame", nil, scrollChild)
+    local kbOverlay = CreateFrame("Frame", nil, keybindings)
     kbOverlay:SetPoint("TOPLEFT", page.controls.assistFontSize, "TOPLEFT")
     kbOverlay:SetPoint("BOTTOMRIGHT", page.controls.assistOffsetY, "BOTTOMRIGHT")
     local maxLevel = 0

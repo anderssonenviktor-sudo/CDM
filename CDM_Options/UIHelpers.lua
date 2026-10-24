@@ -266,6 +266,15 @@ local function StyleSliderInput(input)
     end)
 end
 
+function UI.ApplyCrossIcon(button)
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("CENTER")
+    icon:SetSize(24, 24)
+    icon:SetTexture("Interface\\AddOns\\CDM\\Media\\Textures\\cross-small-white")
+    icon:SetVertexColor(1, 0.267, 0.267, 1)
+    return icon
+end
+
 function UI.CreateConfigWindow(parent, name)
     local frame = CreateFrame("Frame", name, parent, "BackdropTemplate")
     frame:SetBackdrop({
@@ -281,20 +290,15 @@ function UI.CreateConfigWindow(parent, name)
     closeButton:SetPoint("TOPRIGHT", -8, -8)
     closeButton:SetFrameLevel(frame:GetFrameLevel() + 20)
 
-    local closeText = closeButton:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-    closeText:SetPoint("CENTER")
-    closeText:SetText("X")
-    closeText:SetTextColor(0.9, 0.15, 0.15, 1)
+    UI.ApplyCrossIcon(closeButton)
 
     closeButton:SetScript("OnClick", function() frame:Hide() end)
     closeButton:SetScript("OnEnter", function(self)
-        closeText:SetTextColor(1, 0.35, 0.35, 1)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["Close"])
         GameTooltip:Show()
     end)
     closeButton:SetScript("OnLeave", function()
-        closeText:SetTextColor(0.9, 0.15, 0.15, 1)
         GameTooltip:Hide()
     end)
     closeButton:SetScript("OnHide", function() GameTooltip:Hide() end)
@@ -841,8 +845,81 @@ function UI.AttachCloseMenusOnScroll(scrollFrame)
     end)
 end
 
+function UI.StyleScrollBar(scrollFrame)
+    local bar = scrollFrame.ScrollBar
+    if not bar or bar._cdmStyled then return end
+    bar._cdmStyled = true
+
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 0, 0)
+    bar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 0, 0)
+    bar:SetWidth(10)
+
+    local function HideArrow(button)
+        if not button then return end
+        button:Hide()
+        button:EnableMouse(false)
+    end
+    HideArrow(bar.Back or bar.ScrollUpButton)
+    HideArrow(bar.Forward or bar.ScrollDownButton)
+
+    local function HideArtwork(frame)
+        for _, region in ipairs({ frame:GetRegions() }) do
+            if region:IsObjectType("Texture") then region:SetAlpha(0) end
+        end
+    end
+    HideArtwork(bar)
+    if bar.Background then
+        bar.Background:Hide()
+    end
+
+    local track = bar.Track or bar
+    if track ~= bar then
+        HideArtwork(track)
+        track:ClearAllPoints()
+        track:SetAllPoints(bar)
+    end
+    local background = track:CreateTexture(nil, "BACKGROUND")
+    background:SetPoint("TOP", 0, 0)
+    background:SetPoint("BOTTOM", 0, 0)
+    background:SetWidth(6)
+    background:SetColorTexture(0.10, 0.10, 0.12, 0.9)
+
+    if bar.GetThumb then
+        local thumb = bar:GetThumb()
+        -- Keep Blizzard's atlas regions intact for its size and state callbacks.
+        HideArtwork(thumb)
+        thumb:SetWidth(10)
+        local fill = thumb:CreateTexture(nil, "OVERLAY")
+        fill:SetPoint("TOP", 0, 0)
+        fill:SetPoint("BOTTOM", 0, 0)
+        fill:SetWidth(6)
+        fill:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 1)
+        fill:SetAlpha(0.85)
+        thumb:HookScript("OnEnter", function() fill:SetAlpha(1) end)
+        thumb:HookScript("OnLeave", function() fill:SetAlpha(0.85) end)
+        bar:SetHideIfUnscrollable(true)
+    else
+        local thumb = bar:GetThumbTexture()
+        if thumb then
+            thumb:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 1)
+            thumb:SetAlpha(0.85)
+            thumb:SetSize(6, 40)
+            bar:HookScript("OnEnter", function() thumb:SetAlpha(1) end)
+            bar:HookScript("OnLeave", function() thumb:SetAlpha(0.85) end)
+        end
+        local function UpdateVisibility()
+            bar:SetShown(scrollFrame:GetVerticalScrollRange() > 0)
+        end
+        scrollFrame:HookScript("OnScrollRangeChanged", UpdateVisibility)
+        scrollFrame:HookScript("OnShow", UpdateVisibility)
+        UpdateVisibility()
+    end
+end
+
 function UI.CreateScrollableTab(page, frameName, contentHeight, contentWidth)
     local scrollFrame = CreateFrame("ScrollFrame", frameName, page, "ScrollFrameTemplate")
+    UI.StyleScrollBar(scrollFrame)
     scrollFrame:SetPoint("TOPLEFT", 0, -20)
     scrollFrame:SetPoint("BOTTOMRIGHT", -10, 20)
     UI.AttachCloseMenusOnScroll(scrollFrame)
@@ -863,6 +940,7 @@ local SCROLL_BOTTOM_PAD = 20
 
 function UI.MakeSubPageScroll(subPage, frameName)
     local sf = CreateFrame("ScrollFrame", frameName, subPage, "ScrollFrameTemplate")
+    UI.StyleScrollBar(sf)
     sf:SetPoint("TOPLEFT", 0, 0)
     sf:SetPoint("BOTTOMRIGHT", -10, 0)
     UI.AttachCloseMenusOnScroll(sf)
@@ -1014,6 +1092,7 @@ function UI.CreateScrollableEditBox(parent, width, height, editWidth)
     boxFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, boxFrame, "UIPanelScrollFrameTemplate")
+    UI.StyleScrollBar(scrollFrame)
     scrollFrame:SetPoint("TOPLEFT", 8, -8)
     scrollFrame:SetPoint("BOTTOMRIGHT", -26, 8)
 
