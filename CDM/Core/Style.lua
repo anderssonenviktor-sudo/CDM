@@ -492,81 +492,100 @@ local function ClearPandemicCDMStyle(frame, frameData)
     BORDER:ClearPandemicBorderColor(frame)
 end
 
-local function ClearReadyGlow(frame, frameData)
-    if frameData.cdmReadyGlowActive then
+local function ClearStateGlow(frame, frameData)
+    if frameData.cdmStateGlowActive then
         if not frameData.cdmAuraGlowActive then
             CDM.Glow:RequestBuffGlow(frame, false)
         end
-        frameData.cdmReadyGlowActive = false
+        frameData.cdmStateGlowActive = false
     end
 end
 
-local function ApplyReadyGlow(frame, frameData, entry)
-    if frameData.cdmReadyGlowActive and frameData.cdmBuffGlowOverrideColor == entry.readyGlowColor
+local function ApplyStateGlow(frame, frameData, entry)
+    if frameData.cdmStateGlowActive and frameData.cdmBuffGlowOverrideColor == entry.glowStateColor
         and frameData.cdmBuffGlowOverrideType == entry.glowType then
         local host = frameData.cdmBuffGlowHost
         if host and host:IsShown() and host:GetWidth() >= 1 and GetFrameData(host).cdmGlowActive then
             return
         end
     end
-    CDM.Glow:RequestBuffGlow(frame, true, entry.readyGlowColor, nil, entry.glowType)
-    frameData.cdmReadyGlowActive = true
+    CDM.Glow:RequestBuffGlow(frame, true, entry.glowStateColor, nil, entry.glowType)
+    frameData.cdmStateGlowActive = true
 end
 
-local function GetReadyGlowDecision(frame, frameData, entry, spellID, cdInfo)
-    if not entry or not entry.readyGlowEnabled then
+-- Returns decisionKnown, shouldGlow. Ready and On Cooldown ignore the GCD.
+local function GetStateGlowDecision(frame, frameData, entry, spellID, cdInfo)
+    local state = entry and entry.glowState
+    if not state then
         return true, false
     end
-    if frameData.cdmAuraOverrideActive then
+    -- Aura Glow and the state glow share one glow slot; Aura Glow wins.
+    if frameData.cdmAuraGlowActive then
         return true, false
     end
+
+    if state == "always" then
+        return true, true
+    elseif state == "active" then
+        return true, frame.cooldownUseAuraDisplayTime == true
+    elseif state == "inactive" then
+        return true, frame.cooldownUseAuraDisplayTime ~= true
+    end
+
     if not spellID then
         return false, false
     end
-
     local info = cdInfo or GetSpellCooldown(spellID)
     if not info then return false, false end
-    local ready = not info.isActive or info.isOnGCD
-    local usable = C_Spell.IsSpellUsable(spellID)
-    return true, ready and usable
+    local onCooldown = info.isActive and not info.isOnGCD
+
+    if state == "cooldown" then
+        return true, onCooldown and true or false
+    end
+    -- "ready": the aura overlay replaces the cooldown display while shown.
+    if frameData.cdmAuraOverrideActive then
+        return true, false
+    end
+    return true, not onCooldown and C_Spell.IsSpellUsable(spellID) and true or false
 end
 
-local function SyncReadyGlow(frame, frameData, entry, spellID, cdInfo)
-    local decisionKnown, shouldShowReadyGlow = GetReadyGlowDecision(frame, frameData, entry, spellID, cdInfo)
+local function SyncStateGlow(frame, frameData, entry, spellID, cdInfo)
+    local decisionKnown, shouldGlow = GetStateGlowDecision(frame, frameData, entry, spellID, cdInfo)
     if not decisionKnown then
         return
     end
 
-    if shouldShowReadyGlow then
-        ApplyReadyGlow(frame, frameData, entry)
+    if shouldGlow then
+        ApplyStateGlow(frame, frameData, entry)
     else
-        ClearReadyGlow(frame, frameData)
+        ClearStateGlow(frame, frameData)
     end
 end
 
-local READY_GLOW_VIEWERS = { VIEWERS.ESSENTIAL, VIEWERS.UTILITY }
+local STATE_GLOW_VIEWERS = { VIEWERS.ESSENTIAL, VIEWERS.UTILITY }
 
-local function RefreshReadyGlowForAllFrames()
-    local set = CDM._readyGlowCooldownIDs
+local function RefreshStateGlowForAllFrames()
+    local set = CDM._stateGlowCooldownIDs
     if not set or not next(set) then return end
 
     local map = CDM._auraOverlayEnabled
-    for _, vName in ipairs(READY_GLOW_VIEWERS) do
+    for _, vName in ipairs(STATE_GLOW_VIEWERS) do
         local viewer = _G[vName]
         if viewer and viewer.itemFramePool then
             for frame in viewer.itemFramePool:EnumerateActive() do
                 local cdID = frame.cooldownID
                 if cdID and set[cdID] then
-                    SyncReadyGlow(frame, GetFrameData(frame), map[cdID], GetCastSpellID(frame))
+                    SyncStateGlow(frame, GetFrameData(frame), map[cdID], GetCastSpellID(frame))
                 end
             end
         end
     end
 end
 
-local readyGlowOwner = {}
-EventRegistry:RegisterCallback("CDM.PlayerPowerChanged", RefreshReadyGlowForAllFrames, readyGlowOwner)
-CDM:RegisterEvent("SPELL_UPDATE_USABLE", RefreshReadyGlowForAllFrames)
+local stateGlowOwner = {}
+EventRegistry:RegisterCallback("CDM.PlayerPowerChanged", RefreshStateGlowForAllFrames, stateGlowOwner)
+CDM:RegisterEvent("SPELL_UPDATE_USABLE", RefreshStateGlowForAllFrames)
+CDM:RegisterEvent("SPELL_UPDATE_COOLDOWN", RefreshStateGlowForAllFrames)
 
 function CDM:ApplyAuraOverride(frame, cachedEntry)
     if not frame then return end
@@ -580,7 +599,7 @@ function CDM:ApplyAuraOverride(frame, cachedEntry)
     local spellID = GetCastSpellID(frame)
     if not spellID then
         ClearAuraOverlay(frame, frameData)
-        ClearReadyGlow(frame, frameData)
+        ClearStateGlow(frame, frameData)
         frameData.isProcessingOverride = false
         return
     end
@@ -606,7 +625,7 @@ function CDM:ApplyAuraOverride(frame, cachedEntry)
         WriteOverrideDesat(frame, spellID, cdInfo)
     end
 
-    SyncReadyGlow(frame, frameData, entry, spellID, cdInfo)
+    SyncStateGlow(frame, frameData, entry, spellID, cdInfo)
 
     frameData.isProcessingOverride = false
 end
@@ -1174,7 +1193,7 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
                     if not entry
                        and not frame.cooldownUseAuraDisplayTime
                        and not fd.cdmAuraOverrideActive
-                       and not fd.cdmReadyGlowActive then
+                       and not fd.cdmStateGlowActive then
                         return
                     end
 
@@ -1206,10 +1225,10 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
                     end
 
                     if frame.cooldownID then
-                        if entry and entry.readyGlowEnabled then
-                            SyncReadyGlow(frame, fd, entry, sid, cdInfo)
-                        elseif fd.cdmReadyGlowActive then
-                            ClearReadyGlow(frame, fd)
+                        if entry and entry.glowState then
+                            SyncStateGlow(frame, fd, entry, sid, cdInfo)
+                        elseif fd.cdmStateGlowActive then
+                            ClearStateGlow(frame, fd)
                         end
                     end
                 end)

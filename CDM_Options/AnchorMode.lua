@@ -3,6 +3,7 @@ local CDM = _G[AddonName]
 if not CDM then return end
 
 local ns = CDM._OptionsNS
+local UI = ns.ConfigUI
 local L = CDM.L
 local VIEWERS = CDM.CONST.VIEWERS
 
@@ -174,6 +175,7 @@ local function EnsureViewerPosition(viewerName, defaults)
     end
     return viewerPositions.Default
 end
+ns.EnsureViewerPosition = EnsureViewerPosition
 
 local GetFrameBounds
 local buffBarFrameScratch = {}
@@ -199,7 +201,7 @@ end
 
 local function AddEntry(key, label, frame, getOffsets, setOffsets, apply, getBounds, hasActiveFrames)
     if not frame then return end
-    AnchorMode.entries[#AnchorMode.entries + 1] = {
+    local entry = {
         key = key,
         label = label,
         frame = frame,
@@ -209,6 +211,8 @@ local function AddEntry(key, label, frame, getOffsets, setOffsets, apply, getBou
         getBounds = getBounds,
         hasActiveFrames = hasActiveFrames,
     }
+    AnchorMode.entries[#AnchorMode.entries + 1] = entry
+    return entry
 end
 
 local function AddViewerEntries()
@@ -248,19 +252,32 @@ local function AddViewerEntries()
     if not CDM.db.moveBuffsDown then
         local buff = containers[VIEWERS.BUFF]
         local buffFrames = CDM.ungroupedAnchorFrames and CDM.ungroupedAnchorFrames[VIEWERS.BUFF]
+        -- Screen placement lives in editModePositions; other anchors have their own offsets.
+        local function IsScreenAnchored()
+            return (CDM.db.buffAnchorTarget or "screen") == "screen"
+        end
         AddEntry("buff", L["Buff Icons"], buff,
             function()
+                if not IsScreenAnchored() then
+                    return CDM.db.buffAnchorOffsetX or 0, CDM.db.buffAnchorOffsetY or 0
+                end
                 local p = EnsureViewerPosition(VIEWERS.BUFF, { point = "CENTER", x = 0, y = -149 })
                 return p.x or 0, p.y or -149
             end,
             function(x, y)
+                if not IsScreenAnchored() then
+                    CDM.db.buffAnchorOffsetX, CDM.db.buffAnchorOffsetY = x, y
+                    return
+                end
                 local p = EnsureViewerPosition(VIEWERS.BUFF, { point = "CENTER", x = 0, y = -149 })
                 p.x, p.y = x, y
             end,
             function()
                 CDM:UpdateBuffContainerPosition()
-                local p = EnsureViewerPosition(VIEWERS.BUFF, { point = "CENTER", x = 0, y = -149 })
-                CDM:NotifyPositionSliderUpdate("buff", p.x, p.y, true)
+                if IsScreenAnchored() then
+                    local p = EnsureViewerPosition(VIEWERS.BUFF, { point = "CENTER", x = 0, y = -149 })
+                    CDM:NotifyPositionSliderUpdate("buff", p.x, p.y, true)
+                end
             end,
             function() return GetFrameBounds(buffFrames) end,
             function() return GetFrameBounds(buffFrames) ~= nil end)
@@ -511,6 +528,80 @@ local function ConfigureEntrySize(entry)
     end
 end
 
+-- Groups reset their offsets on a new target, as the group editors do.
+local function GroupAnchor(group, options, refresh)
+    return {
+        options = options,
+        get = function() return group.anchorTarget or "screen" end,
+        set = function(value)
+            group.anchorTarget = value
+            group.anchorPoint = group.anchorPoint or "CENTER"
+            group.anchorRelativeTo = group.anchorRelativeTo or "CENTER"
+            group.offsetX, group.offsetY = 0, 0
+            refresh()
+        end,
+    }
+end
+
+local function ConfigureEntryAnchor(entry)
+    local key = entry.key
+    local groupIndex = tonumber(key:match("^cooldown_group_(%d+)$"))
+    local buffIndex = tonumber(key:match("^buff_group_(%d+)$"))
+    local barIndex = tonumber(key:match("^buff_bar_group_(%d+)$"))
+    local resourceKey = key:match("^resource_(.+)$")
+    if groupIndex then
+        entry.anchor = GroupAnchor(CDM.CooldownGroupSets.groups[groupIndex], UI.AnchorTargets.cooldownGroup,
+            function() CDM:Refresh("CD_DATA") end)
+    elseif buffIndex then
+        entry.anchor = GroupAnchor(CDM.BuffGroupSets.groups[buffIndex], UI.AnchorTargets.buffGroup,
+            function() CDM:Refresh("BUFF_DATA") end)
+    elseif barIndex then
+        entry.anchor = GroupAnchor(CDM.buffBarGroupSets.groups[barIndex], UI.AnchorTargets.buffBarGroup,
+            function()
+                CDM.InvalidateBuffBarEntries()
+                CDM:Refresh("BUFF_DATA", "STYLE", "LAYOUT")
+            end)
+    elseif key == "buff" then
+        entry.anchor = {
+            options = UI.AnchorTargets.buffViewer,
+            get = function() return CDM.db.buffAnchorTarget or "screen" end,
+            set = function(value)
+                -- Screen placement keeps its Edit Mode position.
+                if value ~= "screen" then
+                    CDM.db.buffAnchorOffsetX, CDM.db.buffAnchorOffsetY = 0, 0
+                end
+                CDM.db.buffAnchorTarget = value
+                CDM.db.moveBuffsDown = false
+                CDM:Refresh("LAYOUT")
+            end,
+        }
+    elseif key == "cast_bar" then
+        entry.anchor = {
+            options = UI.GetCastBarAnchorTargets,
+            get = function() return CDM.db.castBarAnchor or "resources" end,
+            set = function(value)
+                CDM.db.castBarAnchor = value
+                CDM:Refresh("STYLE")
+            end,
+        }
+    elseif resourceKey and ns.GetResourceAnchorTargets then
+        local classKey = ns.GetResourceBarClassKey(resourceKey)
+        entry.anchor = {
+            options = function() return ns.GetResourceAnchorTargets(classKey, resourceKey) end,
+            get = function() return CDM:GetBarSettingForClass(classKey, resourceKey, "anchorTo") or "screen" end,
+            set = function(value)
+                CDM:SetBarSettingForClass(classKey, resourceKey, "anchorTo", value)
+                CDM:Refresh("RESOURCES", "LAYOUT")
+            end,
+        }
+    end
+end
+
+local function GetAnchorOptions(anchor)
+    local options = anchor.options
+    return type(options) == "function" and options() or options
+end
+
 local function BuildEntries()
     for i = #AnchorMode.entries, 1, -1 do
         AnchorMode.entries[i] = nil
@@ -524,7 +615,10 @@ local function BuildEntries()
     AddGroupEntries("buff_group_", L["Buff Group"], CDM.buffGroupContainers, CDM.BuffGroupSets,
         function() CDM:UpdateAllBuffGroupContainers() end, CDM.buffGroupFrames, true)
     AddBuffBarGroupEntries()
-    for _, entry in ipairs(AnchorMode.entries) do ConfigureEntrySize(entry) end
+    for _, entry in ipairs(AnchorMode.entries) do
+        ConfigureEntrySize(entry)
+        ConfigureEntryAnchor(entry)
+    end
 end
 
 local dragging
@@ -662,6 +756,8 @@ end
 
 local nudgePanel
 local anchorBanner
+local RebuildEntries
+local PANEL_BG = { 0.035, 0.035, 0.04, 0.96 }
 
 local function CreateAnchorBanner()
     if anchorBanner then return anchorBanner end
@@ -683,7 +779,7 @@ local function CreateAnchorBanner()
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    banner:SetBackdropColor(0.035, 0.035, 0.04, 0.96)
+    banner:SetBackdropColor(PANEL_BG[1], PANEL_BG[2], PANEL_BG[3], PANEL_BG[4])
     banner:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 1)
 
     local label = banner:CreateFontString(nil, "OVERLAY", "CDM_Font12")
@@ -722,9 +818,43 @@ local function SelectEntry(entry)
     if nudgePanel then
         for _, box in ipairs(nudgePanel.boxes) do box:ClearFocus() end
     end
+    if nudgePanel then nudgePanel.anchorDropdown:CloseMenu() end
     AnchorMode.selectedEntry = entry
     RefreshOverlaySelection()
     if UpdateNudgePanel then UpdateNudgePanel() end
+end
+
+local function ApplyEntrySize(entry, axis, value)
+    if not (entry and entry.writeSize) or InCombatLockdown() then return end
+    local limits = entry.sizeLimits[axis]
+    value = math_floor(value + 0.5)
+    if not (axis == "width" and entry.autoWidth and value == 0) then
+        value = math.max(limits[1], math.min(limits[2], value))
+    end
+    entry.writeSize(axis, value)
+    entry.refreshSize()
+    UpdateNudgePanel()
+    -- Auto widths resolve after the refreshed layout runs.
+    C_Timer.After(0, function()
+        if AnchorMode.active then UpdateNudgePanel() end
+    end)
+end
+
+local function StepSelectedSize(box, direction)
+    local entry = AnchorMode.selectedEntry
+    if not (entry and entry.readSize) then return end
+    local current = entry.readSize(box.axis)
+    if not current then return end
+    ApplyEntrySize(entry, box.axis, current + direction * (IsShiftKeyDown() and 10 or 1))
+end
+
+local function SetEntryAnchor(entry, value)
+    local anchor = entry and entry.anchor
+    if not anchor or InCombatLockdown() or anchor.get() == value then return end
+    anchor.set(value)
+    AnchorMode.anchorChanged = true
+    -- A new target can move offsets or add and remove entries.
+    RebuildEntries(entry.key)
 end
 
 local function NudgeSelected(dx, dy)
@@ -774,20 +904,22 @@ local function CreateNudgePanel()
     if nudgePanel then return nudgePanel end
 
     local banner = CreateAnchorBanner()
+    local panelHeight = 182
     local panel = CreateFrame("Frame", "CDM_AnchorNudgeTool", banner, "BackdropTemplate")
-    panel:SetSize(230, 182)
+    panel:SetSize(230, panelHeight)
+    -- Overlap the banner by a pixel so the two borders read as one frame.
     panel:SetPoint("TOP", banner, "BOTTOM", 0, 1)
     panel:SetFrameStrata("TOOLTIP")
     panel:SetFrameLevel(banner:GetFrameLevel() + 1)
-    banner:SetClampRectInsets(0, 0, 0, -181)
+    banner:SetClampRectInsets(0, 0, 0, -(panelHeight - 1))
     panel:EnableMouse(true)
     panel:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    panel:SetBackdropColor(0.06, 0.06, 0.06, 0.94)
-    panel:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+    panel:SetBackdropColor(PANEL_BG[1], PANEL_BG[2], PANEL_BG[3], PANEL_BG[4])
+    panel:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 1)
 
     local selected = panel:CreateFontString(nil, "OVERLAY", "CDM_Font12")
     selected:SetPoint("TOP", 0, -7)
@@ -802,14 +934,39 @@ local function CreateNudgePanel()
         label:SetPoint("TOPLEFT", 14, y)
         label:SetText(labelText)
 
-        local box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+        local box = UI.CreateEditBox(panel)
         box:SetFrameLevel(panel:GetFrameLevel() + 1)
-        box:SetSize(76, 22)
-        box:SetPoint("TOPRIGHT", -14, y + 4)
-        box:SetAutoFocus(false)
+        box:SetSize(70, 22)
+        -- Leaves room on both sides for the steppers.
+        box:SetPoint("TOPRIGHT", -30, y + 4)
         box:SetJustifyH("CENTER")
-        box:SetFontObject("CDM_Font14")
         return box
+    end
+
+    -- The left stepper lowers the value and the right one raises it.
+    local function CreateStepper(box, direction, rotation, onClick)
+        local button = CreateFrame("Button", nil, panel)
+        button:SetFrameLevel(panel:GetFrameLevel() + 1)
+        button:SetSize(18, 22)
+        if direction < 0 then
+            button:SetPoint("RIGHT", box, "LEFT", -2, 0)
+        else
+            button:SetPoint("LEFT", box, "RIGHT", 2, 0)
+        end
+        local icon = button:CreateTexture(nil, "OVERLAY")
+        icon:SetSize(16, 16)
+        icon:SetPoint("CENTER")
+        icon:SetTexture(ARROW_TEXTURE)
+        icon:SetRotation(math_rad(rotation))
+        icon:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1)
+        button:SetScript("OnEnter", function() icon:SetVertexColor(1, 1, 1, 1) end)
+        button:SetScript("OnLeave", function() icon:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1) end)
+        button:SetScript("OnClick", function()
+            -- Commit any typed value first so the step starts from it.
+            box:ClearFocus()
+            onClick(direction)
+        end)
+        return button
     end
 
     panel.xBox = CreateValueBox(L["X Offset"], -36)
@@ -821,24 +978,51 @@ local function CreateNudgePanel()
     panel.sizeBoxes = { panel.widthBox, panel.heightBox }
     panel.boxes = { panel.xBox, panel.yBox, panel.widthBox, panel.heightBox }
 
+    panel.offsetSteppers = {
+        CreateStepper(panel.xBox, -1, -90, function(d) NudgeSelected(d, 0) end),
+        CreateStepper(panel.xBox, 1, 90, function(d) NudgeSelected(d, 0) end),
+        CreateStepper(panel.yBox, -1, 0, function(d) NudgeSelected(0, d) end),
+        CreateStepper(panel.yBox, 1, 180, function(d) NudgeSelected(0, d) end),
+    }
+    panel.sizeSteppers = {}
+    for _, box in ipairs(panel.sizeBoxes) do
+        for _, direction in ipairs({ -1, 1 }) do
+            panel.sizeSteppers[#panel.sizeSteppers + 1] = CreateStepper(box, direction,
+                direction < 0 and -90 or 90, function(d) StepSelectedSize(box, d) end)
+        end
+    end
+
+    local anchorDropdown = UI.CreateDropdown(panel)
+    anchorDropdown:SetPoint("TOPLEFT", 14, -146)
+    anchorDropdown:SetPoint("TOPRIGHT", -10, -146)
+    anchorDropdown:SetHeight(24)
+    anchorDropdown:SetupMenu(function(_, rootDescription)
+        -- Menus open below the TOOLTIP strata this panel uses.
+        rootDescription:AddMenuAcquiredCallback(function(menu)
+            menu:SetFrameStrata("TOOLTIP")
+            menu:SetFrameLevel(panel:GetFrameLevel() + 50)
+        end)
+        local entry = AnchorMode.selectedEntry
+        local anchor = entry and entry.anchor
+        if not anchor then return end
+        for _, option in ipairs(GetAnchorOptions(anchor)) do
+            local value = option.value
+            rootDescription:CreateRadio(option.label,
+                function() return anchor.get() == value end,
+                function() SetEntryAnchor(entry, value) end)
+        end
+    end)
+    panel.anchorDropdown = anchorDropdown
+
     local function CommitBox(box)
         if panel.updating or panel.committing or not box.dirty then return end
         box.dirty = false
         local entry = AnchorMode.selectedEntry
         local value = tonumber(box:GetText())
         if entry and value and value == value and math_abs(value) < math.huge and not InCombatLockdown() then
-            if box.axis and entry.writeSize then
-                local limits = entry.sizeLimits[box.axis]
-                value = math_floor(value + 0.5)
-                if not (box.axis == "width" and entry.autoWidth and value == 0) then
-                    value = math.max(limits[1], math.min(limits[2], value))
-                end
-                entry.writeSize(box.axis, value)
-                entry.refreshSize()
-                C_Timer.After(0, function()
-                    if AnchorMode.active then UpdateNudgePanel() end
-                end)
-            elseif not box.axis then
+            if box.axis then
+                ApplyEntrySize(entry, box.axis, value)
+            else
                 local x, y = entry.getOffsets()
                 if box == panel.xBox then x = value else y = value end
                 ApplyEntryOffsets(entry, x, y, true)
@@ -879,33 +1063,6 @@ local function CreateNudgePanel()
     end)
     panel.widthBox:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    local arrows = {
-        { rotation = -90, dx = -1, dy = 0 },
-        { rotation = 180, dx = 0, dy = 1 },
-        { rotation = 0, dx = 0, dy = -1 },
-        { rotation = 90, dx = 1, dy = 0 },
-    }
-    panel.arrows = {}
-    local buttonSize, iconSize, gap = 30, 25, 7
-    local rowWidth = #arrows * buttonSize + (#arrows - 1) * gap
-    for index, arrow in ipairs(arrows) do
-        local dx, dy = arrow.dx, arrow.dy
-        local button = CreateFrame("Button", nil, panel)
-        button:SetSize(buttonSize, buttonSize)
-        button:SetPoint("BOTTOMLEFT", panel, "BOTTOM", -rowWidth / 2 + (index - 1) * (buttonSize + gap), 5)
-        local icon = button:CreateTexture(nil, "OVERLAY", nil, 1)
-        icon:SetSize(iconSize, iconSize)
-        icon:SetPoint("CENTER")
-        icon:SetTexture(ARROW_TEXTURE)
-        icon:SetRotation(math_rad(arrow.rotation))
-        icon:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1)
-        button.icon = icon
-        button:SetScript("OnEnter", function() icon:SetVertexColor(1, 1, 1, 1) end)
-        button:SetScript("OnLeave", function() icon:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1) end)
-        button:SetScript("OnClick", function() NudgeSelected(dx, dy) end)
-        panel.arrows[index] = button
-    end
-
     panel:Hide()
     nudgePanel = panel
     return panel
@@ -930,23 +1087,35 @@ UpdateNudgePanel = function()
             UpdateBox(box, "--", false)
         end
     end
+    local function SetSteppersEnabled(steppers, enabled)
+        for _, stepper in ipairs(steppers) do
+            stepper:SetEnabled(enabled)
+            stepper:SetAlpha(enabled and 1 or 0.35)
+        end
+    end
+    SetSteppersEnabled(panel.sizeSteppers, entry and entry.readSize and true or false)
+    SetSteppersEnabled(panel.offsetSteppers, entry and true or false)
+
+    local anchor = entry and entry.anchor
+    local dropdown = panel.anchorDropdown
+    if anchor then
+        local value = anchor.get()
+        dropdown:SetDefaultText(UI.GetOptionLabel(GetAnchorOptions(anchor), value, value))
+    else
+        dropdown:SetDefaultText("--")
+    end
+    dropdown:SetEnabled(anchor and true or false)
+    -- Regenerate so the shown selection follows the newly selected entry.
+    dropdown:GenerateMenu()
     if entry then
         local x, y = entry.getOffsets()
         panel.selected:SetText(entry.label)
         UpdateBox(panel.xBox, math_floor((x or 0) + 0.5), true)
         UpdateBox(panel.yBox, math_floor((y or 0) + 0.5), true)
-        for _, button in ipairs(panel.arrows) do
-            button:Enable()
-            button:SetAlpha(1)
-        end
     else
         panel.selected:SetText(L["Select Anchor"])
         UpdateBox(panel.xBox, "--", false)
         UpdateBox(panel.yBox, "--", false)
-        for _, button in ipairs(panel.arrows) do
-            button:Disable()
-            button:SetAlpha(0.35)
-        end
     end
     panel.updating = false
 end
@@ -1003,6 +1172,31 @@ local function ClearOverlays()
     end
 end
 
+local function PopulateEntries(selectKey)
+    BuildEntries()
+    for _, entry in ipairs(AnchorMode.entries) do
+        AnchorMode.overlays[#AnchorMode.overlays + 1] = CreateOverlay(entry)
+        if selectKey and entry.key == selectKey then
+            AnchorMode.selectedEntry = entry
+        end
+    end
+    RefreshOverlaySelection()
+    UpdateNudgePanel()
+end
+
+RebuildEntries = function(selectKey)
+    if AnchorMode.entryTimer then AnchorMode.entryTimer:Cancel() end
+    ClearOverlays()
+    AnchorMode.selectedEntry = nil
+    UpdateNudgePanel()
+    -- Measure bounds after the refreshed layout has been applied.
+    AnchorMode.entryTimer = C_Timer.NewTimer(0, function()
+        AnchorMode.entryTimer = nil
+        if not AnchorMode.active or InCombatLockdown() then return end
+        PopulateEntries(selectKey)
+    end)
+end
+
 function AnchorMode:Enter(button)
     if self.active then return end
     if InCombatLockdown() then
@@ -1029,14 +1223,12 @@ function AnchorMode:Enter(button)
         self.entryTimer = C_Timer.NewTimer(0, function()
             self.entryTimer = nil
             if not self.active or InCombatLockdown() then return end
-            BuildEntries()
-            for _, entry in ipairs(self.entries) do
-                self.overlays[#self.overlays + 1] = CreateOverlay(entry)
-            end
+            PopulateEntries()
         end)
     end)
     BuildGrid()
     self.selectedEntry = nil
+    self.anchorChanged = false
     local panel = CreateNudgePanel()
     CreateAnchorBanner():Show()
     UpdateNudgePanel()
@@ -1084,8 +1276,14 @@ function AnchorMode:Exit(reopenConfig)
         self.openedSettings = nil
     end
     if reopenConfig and not InCombatLockdown() and CDM.API and CDM.API.ShowConfig then
-        CDM.API:ShowConfig()
+        if self.anchorChanged and CDM.API.RebuildConfigFrame then
+            -- Open pages still show the old anchor controls.
+            CDM.API:RebuildConfigFrame(ns.GetCurrentConfigTab and ns.GetCurrentConfigTab())
+        else
+            CDM.API:ShowConfig()
+        end
     end
+    self.anchorChanged = false
 end
 
 function ns.ToggleAnchorMode(button)

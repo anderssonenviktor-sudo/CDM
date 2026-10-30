@@ -877,9 +877,9 @@ function Glow:HookAlertManager()
         end
         frameData.cdmSpellAlertGlow = true
         ShowCustomGlow(frame, overrideColor, overrideType)
-        if frameData.cdmReadyGlowActive then
+        if frameData.cdmStateGlowActive then
             Glow:RequestBuffGlow(frame, false)
-            frameData.cdmReadyGlowActive = false
+            frameData.cdmStateGlowActive = false
         end
     end)
 

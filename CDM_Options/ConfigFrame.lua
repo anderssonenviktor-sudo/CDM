@@ -451,6 +451,10 @@ function API:ShowConfig(targetTab)
     end
 end
 
+function ns.GetCurrentConfigTab()
+    return currentTab
+end
+
 function API:RebuildConfigFrame(targetTab)
     if InCombatLockdown() then
         PrintConfigCombatBlocked(L["rebuild CDM config"])

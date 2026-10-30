@@ -440,7 +440,7 @@ function CDM:ResetFrameSpellCache(frame)
     local frameData = GetFrameData(frame)
     frameData.buffCategorySpellID = nil
     frameData.cdGroupSpellID = nil
-    frameData.cdmReadyGlowActive = nil
+    frameData.cdmStateGlowActive = nil
     frameData.cdmBuffGlowSourceID = nil
 end
 

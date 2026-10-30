@@ -68,6 +68,8 @@ local function CompareBuffFramesDeterministic(a, b)
     return GetStableFrameSortID(a) < GetStableFrameSortID(b)
 end
 
+local DIRECTIONAL_BUFF_GROW = { RIGHT = true, LEFT = true, UP = true, DOWN = true, CENTER_V = true }
+
 local function SortAndPositionBuffFrames(frames, container)
     local count = #frames
     if count == 0 or not container then return end
@@ -79,13 +81,43 @@ local function SortAndPositionBuffFrames(frames, container)
     local df = CDM.defaults or {}
     local sizeBuff = GetConfigValue("sizeBuff", df.sizeBuff) or { w = 40, h = 36 }
     local spacing = GetConfigValue("spacing", df.spacing) or 1
-    local itemW, _, gap, step = GetSnappedBuffMetrics(sizeBuff, spacing)
+    local itemW, itemH, gap, step = GetSnappedBuffMetrics(sizeBuff, spacing)
 
     local shownCount = 0
     for _, f in ipairs(frames) do
         if f:IsShown() then shownCount = shownCount + 1 end
     end
     if shownCount == 0 then shownCount = count end
+
+    -- The container keeps a fixed width because buff groups can anchor to its
+    -- edges, so directional modes start from its centre instead of a corner.
+    local grow = GetConfigValue("buffGrowDirection", "CENTER_H")
+    if DIRECTIONAL_BUFF_GROW[grow] then
+        local stepH = itemH + gap
+        local columnHalf = Pixel.HalfFloor(shownCount * itemH + (shownCount - 1) * gap)
+        local shownIdx = 0
+        for _, frame in ipairs(frames) do
+            local slot
+            if frame:IsShown() then
+                slot = shownIdx
+                shownIdx = shownIdx + 1
+            else
+                slot = shownCount + (frame.layoutIndex or 0)
+            end
+            if grow == "RIGHT" then
+                PlaceBuffFrame(frame, "BOTTOMLEFT", container, "BOTTOM", slot * step, 0)
+            elseif grow == "LEFT" then
+                PlaceBuffFrame(frame, "BOTTOMRIGHT", container, "BOTTOM", -slot * step, 0)
+            elseif grow == "UP" then
+                PlaceBuffFrame(frame, "BOTTOM", container, "BOTTOM", 0, slot * stepH)
+            elseif grow == "DOWN" then
+                PlaceBuffFrame(frame, "TOP", container, "TOP", 0, -slot * stepH)
+            else -- CENTER_V
+                PlaceBuffFrame(frame, "TOP", container, "CENTER", 0, columnHalf - slot * stepH)
+            end
+        end
+        return
+    end
 
     local startLeft = GetCenteredRowPlacement(container.GetWidth and container:GetWidth() or nil, shownCount, itemW, gap)
 

@@ -536,11 +536,63 @@ local function GetBuffBarPositionSettings()
     return viewerTable.Default
 end
 
+local function OnPlayerAnchorChanged()
+    CDM:UpdateBuffContainerPosition()
+end
+
+-- Frame the main Buff viewer anchors to, or nil to use its screen position.
+-- A missing target falls back to the screen rather than hiding every buff.
+local function ResolveBuffAnchorFrame(target)
+    if target == "playerFrame" then
+        -- Re-run once an addon unit frame appears or moves.
+        CDM.RegisterTrackerPositionCallback("CDM_BuffViewer", OnPlayerAnchorChanged)
+        return CDM.GetPlayerAnchorFrame and CDM.GetPlayerAnchorFrame()
+    end
+    CDM.UnregisterTrackerPositionCallback("CDM_BuffViewer")
+    if target == "essential" then
+        return CDM.anchorContainers[VIEWERS.ESSENTIAL]
+    end
+    if target == "castBar" or target == "resources" then
+        return (CDM.GroupContainerUtils.ResolveExternalAnchorTarget(target))
+    end
+    return nil
+end
+
+local buffPositionPending = false
+
+local function FlushPendingBuffPosition(isInCombat)
+    if isInCombat or not buffPositionPending then return end
+    buffPositionPending = false
+    CDM:UpdateBuffContainerPosition()
+end
+
 function CDM:UpdateBuffContainerPosition()
     local buffContainer = self.anchorContainers[VIEWERS.BUFF]
     if not buffContainer then return end
 
+    -- Buff viewer frames anchored to this container can make it protected.
+    if InCombatLockdown() and buffContainer:IsProtected() then
+        if not buffPositionPending then
+            buffPositionPending = true
+            CDM:RegisterCombatStateHandler(FlushPendingBuffPosition)
+        end
+        return
+    end
+
     local db = CDM.db
+    local target = db and db.buffAnchorTarget or "screen"
+    if target ~= "screen" and not (db.moveBuffsDown and db.resourcesEnabled ~= false) then
+        local frame = ResolveBuffAnchorFrame(target)
+        if frame then
+            buffContainer:ClearAllPoints()
+            Pixel.SetGridPoint(buffContainer, db.buffAnchorPoint or "BOTTOM", frame,
+                db.buffAnchorRelativeTo or "TOP", db.buffAnchorOffsetX or 0, db.buffAnchorOffsetY or 0)
+            return
+        end
+    elseif CDM.UnregisterTrackerPositionCallback then
+        CDM.UnregisterTrackerPositionCallback("CDM_BuffViewer")
+    end
+
     if db and db.moveBuffsDown and db.resourcesEnabled ~= false then
         local fallback = db.moveBuffsDownFallback or "lastResource"
         local allowHidden = fallback == "lastResource"

@@ -353,19 +353,7 @@ local function CreateCastBarTab(page, tabId)
         { value = "BOTTOMRIGHT", label = L["Bottom Right"] or "Bottom Right" },
     }
 
-    local function BuildAnchorOptions()
-        local resourcesEnabled = CDM.db.resourcesEnabled ~= false
-        local opts = {
-            { value = "screen",      label = L["Screen"] or "Screen" },
-            { value = "playerFrame", label = L["Player Frame"] or "Player Frame" },
-            { value = "essential",   label = L["Essential Viewer"] or "Essential Viewer" },
-            { value = "utility",     label = L["Utility Viewer"] or "Utility Viewer" },
-        }
-        if resourcesEnabled then
-            opts[#opts + 1] = { value = "resources", label = L["Resources"] or "Resources" }
-        end
-        return opts
-    end
+    local BuildAnchorOptions = UI.GetCastBarAnchorTargets
 
     local anchorLabel = positionContent:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     anchorLabel:SetText(L["Anchor To:"] or "Anchor To:")

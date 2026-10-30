@@ -475,13 +475,7 @@ local function CreateBarsTab(page)
         local right = C.Get(2)
         C.Header(right, L["Anchor"])
 
-        local anchorTargets = {
-            { label = L["Screen"], value = "screen" },
-            { label = L["Player Frame"], value = "playerFrame" },
-            { label = L["Essential Viewer"], value = "essential" },
-            { label = L["Buff Viewer"], value = "buff" },
-            { label = L["Buff Bar Viewer"], value = "buffBar" },
-        }
+        local anchorTargets = UI.AnchorTargets.buffBarGroup
 
         C.Label(right, L["Anchor To"])
         local anchorLabel, anchorDropdown, relLabel, relDropdown
@@ -821,8 +815,8 @@ local function CreateBarsTab(page)
                             atLabel:SetText(L["At"])
                             atLabel:SetPoint("TOPLEFT", col.x, col.y - 4)
 
-                            local stacksInput = CreateFrame("EditBox", nil, pg, "InputBoxTemplate")
-                            stacksInput:SetSize(44, 20)
+                            local stacksInput = UI.CreateEditBox(pg)
+                            stacksInput:SetSize(44, 22)
                             stacksInput:SetPoint("LEFT", atLabel, "RIGHT", 8, 0)
                             stacksInput:SetAutoFocus(false)
                             stacksInput:SetNumeric(true)
@@ -894,8 +888,8 @@ local function CreateBarsTab(page)
                     tickLabel:SetText(L["At stacks:"])
                     tickLabel:SetPoint("TOPLEFT", col.x, col.y - 4)
 
-                    local tickInput = CreateFrame("EditBox", nil, pg, "InputBoxTemplate")
-                    tickInput:SetSize(110, 20)
+                    local tickInput = UI.CreateEditBox(pg)
+                    tickInput:SetSize(110, 22)
                     tickInput:SetPoint("LEFT", tickLabel, "RIGHT", 8, 0)
                     tickInput:SetAutoFocus(false)
                     tickInput:SetMaxLetters(60)
@@ -1328,13 +1322,11 @@ local function CreateBarsTab(page)
                 row.title:Hide()
                 local box = row.renameBox
                 if not box then
-                    box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+                    box = UI.CreateEditBox(row)
                     box:SetPoint("TOPLEFT", 4, -1)
                     box:SetPoint("TOPRIGHT", -4, -1)
                     box:SetHeight(GROUP_TITLE_H - 2)
-                    box:SetFontObject("CDM_Font14")
                     box:SetFrameLevel(row.titleButton:GetFrameLevel() + 2)
-                    box:SetAutoFocus(false)
                     box:SetMaxLetters(40)
                     row.renameBox = box
                 end

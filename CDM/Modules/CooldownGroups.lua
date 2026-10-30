@@ -25,7 +25,7 @@ CDM.cooldownGroupContainers = cdContainers
 CDM.cooldownGroupFrames = CDM.cooldownGroupFrames or {}
 
 CDM._auraOverlayEnabled = CDM._auraOverlayEnabled or {}
-CDM._readyGlowCooldownIDs = CDM._readyGlowCooldownIDs or {}
+CDM._stateGlowCooldownIDs = CDM._stateGlowCooldownIDs or {}
 
 local GCU = CDM.GroupContainerUtils
 
@@ -68,7 +68,7 @@ function CDM:UpdateAllCooldownGroupContainers()
             local container = cdDescriptor:GetOrCreateContainer(groupIndex)
             cdDescriptor:UpdateContainerPosition(groupIndex, groupData, GetContainerForAnchorTarget)
             local at = groupData.anchorTarget or "screen"
-            if not container:IsShown() and at ~= "essential" and at ~= "utility" and at ~= "buff" and at ~= "playerFrame" then
+            if not container:IsShown() and not GCU.IsTargetAnchored(at) then
                 container:Show()
             end
             activeIndices[groupIndex] = true
@@ -467,8 +467,8 @@ local function BuildMapEntry(entry, isDotDefault, auraOverlay)
         if entry.auraGlowColor then mapEntry.auraGlowColor = entry.auraGlowColor end
         if entry.auraBorderEnabled then mapEntry.auraBorderEnabled = true end
         if entry.auraBorderColor then mapEntry.auraBorderColor = entry.auraBorderColor end
-        if entry.readyGlowEnabled then mapEntry.readyGlowEnabled = true end
-        if entry.readyGlowColor then mapEntry.readyGlowColor = entry.readyGlowColor end
+        if entry.glowState then mapEntry.glowState = entry.glowState end
+        if entry.glowStateColor then mapEntry.glowStateColor = entry.glowStateColor end
         if entry.glowTypeOverride then mapEntry.glowType = entry.glowType end
     end
     return mapEntry
@@ -483,9 +483,9 @@ local scratchSpellToEntry = {}
 
 function CDM:RebuildAuraOverlayEnabledMap()
     local map = CDM._auraOverlayEnabled
-    local readyGlowSet = CDM._readyGlowCooldownIDs
+    local stateGlowSet = CDM._stateGlowCooldownIDs
     table_wipe(map)
-    table_wipe(readyGlowSet)
+    table_wipe(stateGlowSet)
 
     local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
     if not specID then
@@ -510,14 +510,14 @@ function CDM:RebuildAuraOverlayEnabledMap()
                         seen[spellID] = true
                         local ov = GetSpellOverride(group, spellID)
                         if ov and ov.showAuraOverlay == false then
-                            if ov.readyGlowEnabled then
+                            if ov.glowState then
                                 AddToSpellMap(spellToEntry, spellID, BuildMapEntry(ov, false, false))
                             end
                         elseif ov and ov.showAuraOverlay == true then
                             AddToSpellMap(spellToEntry, spellID, BuildMapEntry(ov, DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[spellID], true))
                         elseif DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[spellID] then
                             AddToSpellMap(spellToEntry, spellID, BuildMapEntry(ov, true, true))
-                        elseif ov and ov.readyGlowEnabled then
+                        elseif ov and ov.glowState then
                             AddToSpellMap(spellToEntry, spellID, BuildMapEntry(ov, false, false))
                         end
                     end
@@ -532,14 +532,14 @@ function CDM:RebuildAuraOverlayEnabledMap()
             if type(entry) == "table" and not seen[sid] then
                 seen[sid] = true
                 if entry.showAuraOverlay == false then
-                    if entry.readyGlowEnabled then
+                    if entry.glowState then
                         AddToSpellMap(spellToEntry, sid, BuildMapEntry(entry, false, false))
                     end
                 elseif entry.showAuraOverlay == true then
                     AddToSpellMap(spellToEntry, sid, BuildMapEntry(entry, DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[sid], true))
                 elseif DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[sid] then
                     AddToSpellMap(spellToEntry, sid, BuildMapEntry(entry, true, true))
-                elseif entry.readyGlowEnabled then
+                elseif entry.glowState then
                     AddToSpellMap(spellToEntry, sid, BuildMapEntry(entry, false, false))
                 end
             end
@@ -616,8 +616,8 @@ function CDM:RebuildAuraOverlayEnabledMap()
                         end
                         if match then
                             map[cdID] = match
-                            if match.readyGlowEnabled then
-                                readyGlowSet[cdID] = true
+                            if match.glowState then
+                                stateGlowSet[cdID] = true
                             end
                         end
                     end

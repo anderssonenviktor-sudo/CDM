@@ -28,6 +28,66 @@ local BAR_DISPLAY_NAMES = ns.BAR_DISPLAY_NAMES
 
 local IsBarActiveForSpec = ns.IsBarActiveForSpec
 
+local function IsGeneralBar(barKey)
+    for _, key in ipairs(CDM.CLASS_BARS and CDM.CLASS_BARS["General"] or {}) do
+        if key == barKey then return true end
+    end
+    return false
+end
+
+-- Shared with Anchor Mode so both list the same targets. Bars that would form
+-- an anchor cycle or never appear together in a spec are left out.
+function ns.GetResourceAnchorTargets(classKey, barKey)
+    local function WouldCreateCycle(candidateKey)
+        local visited = { [barKey] = true }
+        local current = candidateKey
+        while current do
+            if visited[current] then return true end
+            visited[current] = true
+            local ck = IsGeneralBar(current) and "General" or classKey
+            current = CDM:GetBarSettingForClass(ck, current, "anchorTo")
+            if not current or current == "screen" or current == "essential"
+               or current == "playerFrame" then
+                return false
+            end
+        end
+        return false
+    end
+
+    local options = {
+        { value = "screen", label = L["Screen"] },
+        { value = "playerFrame", label = L["Player Frame"] },
+        { value = "essential", label = L["Essential Viewer"] },
+    }
+    local compatClassKey = classKey
+    if classKey == "General" then
+        local _, pc = UnitClass("player")
+        compatClassKey = pc or classKey
+    end
+
+    local function AddBars(bars)
+        for _, otherKey in ipairs(bars or {}) do
+            if otherKey ~= barKey
+               and CDM.AreBarKeysSpecCompatible(compatClassKey, barKey, otherKey)
+               and not WouldCreateCycle(otherKey) then
+                options[#options + 1] = { value = otherKey, label = BAR_DISPLAY_NAMES[otherKey] or otherKey }
+            end
+        end
+    end
+    AddBars(CDM.CLASS_BARS and CDM.CLASS_BARS[classKey])
+    if classKey ~= "General" then
+        AddBars(CDM.CLASS_BARS and CDM.CLASS_BARS["General"])
+    end
+    return options
+end
+
+-- Same class resolution the runtime uses for CDM:GetBarSetting.
+function ns.GetResourceBarClassKey(barKey)
+    if IsGeneralBar(barKey) then return "General" end
+    local _, playerClass = UnitClass("player")
+    return playerClass
+end
+
 local SECONDARY_COLOR_FIELDS = {
     Runes = { { key = "rechargingColor", label = L["Recharging"] } },
     Essence = {
@@ -173,11 +233,9 @@ local function BuildTicksSection(rc, classKey, barKey, startYOff)
             row:SetSize(160, 24)
             row:SetPoint("TOPLEFT", 0, y)
 
-            local valBox = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+            local valBox = UI.CreateEditBox(row)
             valBox:SetSize(80, 22)
-            valBox:SetPoint("LEFT", 6, 0)
-            valBox:SetAutoFocus(false)
-            valBox:SetNumeric(false)
+            valBox:SetPoint("LEFT", 0, 0)
             valBox:SetText(tostring(cfg.values[i]))
             valBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
             valBox:SetScript("OnEscapePressed", function(self)
@@ -588,64 +646,7 @@ local function CreateResourcesTab(page, tabId)
         anchorToLabel:SetText(L["Anchor To:"])
         anchorToLabel:SetPoint("TOPLEFT", 0, yOff)
 
-        local generalBarSet = {}
-        local generalBars = CDM.CLASS_BARS and CDM.CLASS_BARS["General"]
-        if generalBars then
-            for _, k in ipairs(generalBars) do generalBarSet[k] = true end
-        end
-
-        local function WouldCreateCycle(candidateKey)
-            local visited = { [barKey] = true }
-            local current = candidateKey
-            while current do
-                if visited[current] then return true end
-                visited[current] = true
-                local ck = generalBarSet[current] and "General" or classKey
-                current = CDM:GetBarSettingForClass(ck, current, "anchorTo")
-                if not current or current == "screen" or current == "essential"
-                   or current == "playerFrame" then
-                    return false
-                end
-            end
-            return false
-        end
-
-        local anchorToOptions = {
-            { value = "screen", label = L["Screen"] },
-            { value = "playerFrame", label = L["Player Frame"] },
-            { value = "essential", label = L["Essential Viewer"] },
-        }
-        local compatClassKey = classKey
-        if classKey == "General" then
-            local _, pc = UnitClass("player")
-            compatClassKey = pc or classKey
-        end
-
-        local classBars = CDM.CLASS_BARS and CDM.CLASS_BARS[classKey]
-        if classBars then
-            for _, otherKey in ipairs(classBars) do
-                if otherKey ~= barKey
-                   and CDM.AreBarKeysSpecCompatible(compatClassKey, barKey, otherKey)
-                   and not WouldCreateCycle(otherKey) then
-                    anchorToOptions[#anchorToOptions + 1] = {
-                        value = otherKey,
-                        label = BAR_DISPLAY_NAMES[otherKey] or otherKey,
-                    }
-                end
-            end
-        end
-        if classKey ~= "General" and generalBars then
-            for _, otherKey in ipairs(generalBars) do
-                if otherKey ~= barKey
-                   and CDM.AreBarKeysSpecCompatible(compatClassKey, barKey, otherKey)
-                   and not WouldCreateCycle(otherKey) then
-                    anchorToOptions[#anchorToOptions + 1] = {
-                        value = otherKey,
-                        label = BAR_DISPLAY_NAMES[otherKey] or otherKey,
-                    }
-                end
-            end
-        end
+        local anchorToOptions = ns.GetResourceAnchorTargets(classKey, barKey)
 
         local currentAnchorTo = CDM:GetBarSettingForClass(classKey, barKey, "anchorTo") or "screen"
 

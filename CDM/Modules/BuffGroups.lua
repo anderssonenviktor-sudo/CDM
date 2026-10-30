@@ -533,7 +533,7 @@ function CDM:UpdateAllBuffGroupContainers()
         local container = bgDescriptor:GetOrCreateContainer(groupIndex)
         bgDescriptor:UpdateContainerPosition(groupIndex, groupData, GetContainerForAnchorTarget)
         local at = groupData.anchorTarget or "screen"
-        if not container:IsShown() and at ~= "essential" and at ~= "buff" and at ~= "playerFrame" then
+        if not container:IsShown() and not GCU.IsTargetAnchored(at) then
             container:Show()
         end
         activeIndices[groupIndex] = true

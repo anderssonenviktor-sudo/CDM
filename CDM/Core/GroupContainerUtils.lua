@@ -5,6 +5,7 @@ local Snap = Pixel.Snap
 
 local GetFrameData = CDM.GetFrameData
 local IsSafeNumber = CDM.IsSafeNumber
+local InCombatLockdown = InCombatLockdown
 CDM.GroupContainerUtils = {}
 
 function CDM.GroupContainerUtils.AssignGroupSortKeys(frames, spellOrder, frameDataKey)
@@ -27,8 +28,38 @@ function CDM.GroupContainerUtils.AssignGroupSortKeys(frames, spellOrder, frameDa
     end
 end
 
-function CDM.GroupContainerUtils.AnchorToTarget(container, targetContainer, anchorPoint, relativePoint, offsetX, offsetY)
-    if not targetContainer or not targetContainer:IsShown() then
+-- Targets owned by CDM's cast bar and resource modules rather than a viewer.
+local EXTERNAL_TARGETS = { castBar = true, resources = true }
+
+local TARGET_ANCHORED = {
+    essential = true, utility = true, buff = true, buffBar = true,
+    playerFrame = true, castBar = true, resources = true,
+}
+
+-- True when the group's visibility follows its anchor target, so the caller
+-- must not force-show a container that UpdateContainerPosition hid.
+function CDM.GroupContainerUtils.IsTargetAnchored(anchorTarget)
+    return TARGET_ANCHORED[anchorTarget] == true
+end
+
+-- Returns frame, followHidden. The cast bar container and resource bars keep
+-- their points while hidden (cast bar disabled, bar load conditions), so groups
+-- stay anchored to them instead of disappearing or jumping. The fallback to the
+-- Essential viewer mirrors the cast bar's own "resources" anchor fallback.
+function CDM.GroupContainerUtils.ResolveExternalAnchorTarget(anchorTarget)
+    if not EXTERNAL_TARGETS[anchorTarget] then return nil end
+    if anchorTarget == "castBar" then
+        if CDM.castBarContainer then return CDM.castBarContainer, true end
+    elseif not (CDM.db and CDM.db.resourcesEnabled == false) and CDM.ResolveResourcesAnchor then
+        local bar = CDM.ResolveResourcesAnchor(true)
+        if bar then return bar, true end
+    end
+    local containers = CDM.anchorContainers
+    return containers and containers[CDM.CONST.VIEWERS.ESSENTIAL], false
+end
+
+function CDM.GroupContainerUtils.AnchorToTarget(container, targetContainer, anchorPoint, relativePoint, offsetX, offsetY, followHidden)
+    if not targetContainer or (not followHidden and not targetContainer:IsShown()) then
         container:ClearAllPoints()
         container:Hide()
         return false
@@ -41,8 +72,11 @@ function CDM.GroupContainerUtils.AnchorToTarget(container, targetContainer, anch
     return true
 end
 
+local descriptors = {}
+
 function CDM.GroupContainerUtils.CreateDescriptor(opts)
     local desc = {}
+    descriptors[#descriptors + 1] = desc
     desc.containers = opts.containers
     desc.registered = {}
 
@@ -89,9 +123,14 @@ function CDM.GroupContainerUtils.CreateDescriptor(opts)
             )
         else
             CDM.InvalidateTrackerAnchorCache(container)
-            local targetContainer = getAnchorTarget(anchorTarget)
+            local targetContainer, followHidden
+            if EXTERNAL_TARGETS[anchorTarget] then
+                targetContainer, followHidden = CDM.GroupContainerUtils.ResolveExternalAnchorTarget(anchorTarget)
+            else
+                targetContainer = getAnchorTarget(anchorTarget)
+            end
             if targetContainer then
-                CDM.GroupContainerUtils.AnchorToTarget(container, targetContainer, anchorPoint, relativePoint, offsetX, offsetY)
+                CDM.GroupContainerUtils.AnchorToTarget(container, targetContainer, anchorPoint, relativePoint, offsetX, offsetY, followHidden)
             elseif anchorTarget == "screen" then
                 container:ClearAllPoints()
                 Pixel.SetPoint(container, "CENTER", UIParent, "CENTER", offsetX, offsetY)
@@ -149,5 +188,53 @@ function CDM.GroupContainerUtils.CreateDescriptor(opts)
         end
     end
 
+    desc.getSets = getSets
     return desc
 end
+
+local function NoAnchorTarget() return nil end
+local externalRefreshPending = false
+
+local function FlushPendingExternalRefresh(isInCombat)
+    if isInCombat or not externalRefreshPending then return end
+    externalRefreshPending = false
+    CDM:RefreshExternalGroupAnchors()
+end
+
+-- Re-resolves groups anchored to the cast bar or resource bars. Their target
+-- frame can change without a group refresh (cast bar toggled, a different
+-- resource bar on top), so the cast bar and resource modules call this.
+function CDM:RefreshExternalGroupAnchors()
+    local buffTarget = self.db and self.db.buffAnchorTarget
+    if EXTERNAL_TARGETS[buffTarget] and self.UpdateBuffContainerPosition then
+        self:UpdateBuffContainerPosition()
+    end
+    local inCombat = InCombatLockdown()
+    for _, desc in ipairs(descriptors) do
+        local sets = desc.getSets()
+        local groups = sets and sets.groups
+        if groups then
+            for idx, gd in ipairs(groups) do
+                local container = desc.containers[idx]
+                if container and EXTERNAL_TARGETS[gd.anchorTarget] then
+                    -- A container becomes protected once a protected viewer
+                    -- frame anchors to it; moving it then waits for combat end.
+                    if inCombat and container:IsProtected() then
+                        if not externalRefreshPending then
+                            externalRefreshPending = true
+                            -- InternalCallbacks loads after this file.
+                            CDM:RegisterCombatStateHandler(FlushPendingExternalRefresh)
+                        end
+                    else
+                        desc:UpdateContainerPosition(idx, gd, NoAnchorTarget)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- A RESOURCES-only refresh rebuilds the bars without updating the cast bar.
+CDM:RegisterRefreshCallback("externalGroupAnchors", function()
+    CDM:RefreshExternalGroupAnchors()
+end, 56, { "RESOURCES" })

@@ -148,6 +148,8 @@ local PLAYER_FRAME_CANDIDATES = {
     "SUFUnitplayer",
     "UUF_Player",
     "EllesmereUIUnitFrames_Player",
+    "EUIStandaloneUnitFrames_Player",
+    "NUF_Player",
     "MSUF_player",
     "EQOLUFPlayerFrame",
     "oUF_Player",
@@ -195,6 +197,8 @@ local function ResolvePlayerAnchorFrame()
     cachedPlayerFrameVersion = trackerAnchorCacheVersion
     return nil
 end
+
+CDM.GetPlayerAnchorFrame = ResolvePlayerAnchorFrame
 
 function CDM.CreateTrackerIcon(parent, namePrefix, id, opts)
     opts = opts or {}

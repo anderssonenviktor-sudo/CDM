@@ -161,6 +161,13 @@ local function RegisterTrinketSpellWatches()
     end
 end
 
+local function HasPlayerAura(spellID)
+    if not (CDM.IsSafeNumber(spellID) and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then
+        return false
+    end
+    return C_UnitAuras.GetPlayerAuraBySpellID(spellID) ~= nil
+end
+
 local function UpdateIcon(frame, forceStyle)
     if not frame or not frame:IsShown() then return end
 
@@ -224,14 +231,29 @@ local function UpdateIcon(frame, forceStyle)
         fd.cdmTrinketAuraBorderActive = nil
     end
     local auraGlow = override and override.auraGlowEnabled and auraActive
-    local readyGlow = override and override.readyGlowEnabled and frame.isOnUse
-        and not isOnCooldown and not auraActive
-    local glowColor = auraGlow and override.auraGlowColor or readyGlow and override.readyGlowColor
-    if (auraGlow or readyGlow) and override.glowColorOverride then
+    local glowState = override and override.glowState
+    local hasAura = auraActive
+    if (glowState == "active" or glowState == "inactive") and not override.showAuraOverlay then
+        hasAura = HasPlayerAura(auraSpellID)
+    end
+    local stateGlow = false
+    if glowState == "always" then
+        stateGlow = true
+    elseif glowState == "ready" then
+        stateGlow = frame.isOnUse and not isOnCooldown and not auraActive
+    elseif glowState == "cooldown" then
+        stateGlow = isOnCooldown
+    elseif glowState == "active" then
+        stateGlow = hasAura
+    elseif glowState == "inactive" then
+        stateGlow = not hasAura
+    end
+    local glowColor = auraGlow and override.auraGlowColor or stateGlow and override.glowStateColor
+    if (auraGlow or stateGlow) and override.glowColorOverride then
         glowColor = override.glowColor or glowColor
     end
     local glowType = override and override.glowTypeOverride and override.glowType or nil
-    if auraGlow or readyGlow then
+    if auraGlow or stateGlow then
         if CDM.Glow and (not fd.cdmTrinketOverrideGlowActive
             or fd.cdmTrinketOverrideGlowColor ~= glowColor
             or fd.cdmTrinketOverrideGlowType ~= glowType) then

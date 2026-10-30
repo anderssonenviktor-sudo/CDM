@@ -14,6 +14,8 @@
     <Script file="BuffGroups.lua"/>
     <Script file="CooldownGroups.lua"/>
 
+    <Script file="ImportAdapters.lua"/>
+    <Script file="ImportAdapterSCM.lua"/>
     <Script file="ImportExport.lua"/>
     <Script file="Profiles.lua"/>
     <Script file="EditModeOverlay.lua"/>

@@ -247,6 +247,12 @@ ns.ConfigKeys = {
                 "editModePositions",
                 "utilityAnchor",
                 "utilityYOffset",
+                "buffAnchorTarget",
+                "buffAnchorPoint",
+                "buffAnchorRelativeTo",
+                "buffAnchorOffsetX",
+                "buffAnchorOffsetY",
+                "buffGrowDirection",
             },
         },
         buffgroups = {

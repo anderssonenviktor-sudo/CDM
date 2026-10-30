@@ -546,15 +546,12 @@ local function CreateBuffGroupsPanel(page)
                 posKey = "countPosition", xKey = "countOffsetX", yKey = "countOffsetY",
                 sizeDefault = 15, posDefault = "BOTTOMRIGHT",
             },
-            anchorTargets = {
-                { label = L["Screen"], value = "screen" },
-                { label = L["Player Frame"], value = "playerFrame" },
-                { label = L["Essential Viewer"], value = "essential" },
-                { label = L["Buff Viewer"], value = "buff" },
-            },
+            anchorTargets = UI.AnchorTargets.buffGroup,
             anchorRelLabels = {
                 playerFrame = L["Player Frame Point"],
                 buff = L["Buff Viewer Point"],
+                castBar = L["Cast Bar Point"],
+                resources = L["Resource Bar Point"],
             },
         })
         if ns.RegisterAnchorPositionUpdater then
@@ -645,11 +642,9 @@ local function CreateBuffGroupsPanel(page)
             textLabel:SetText(L["Text"])
             textLabel:SetPoint("TOPLEFT", 20, yOff - 4)
 
-            local textBox = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+            local textBox = UI.CreateEditBox(rc)
             textBox:SetSize(220, 22)
             textBox:SetPoint("LEFT", textLabel, "RIGHT", 12, 0)
-            textBox:SetFontObject("CDM_Font14")
-            textBox:SetAutoFocus(false)
             textBox:SetMaxLetters(200)
             textBox:SetText(existingOv and existingOv.customText or "")
             textBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
@@ -667,12 +662,10 @@ local function CreateBuffGroupsPanel(page)
 
             local currentSize = existingOv and existingOv.customTextFontSize or 14
 
-            local sizeBox = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
-            sizeBox:SetSize(28, 22)
+            local sizeBox = UI.CreateEditBox(rc)
+            sizeBox:SetSize(36, 22)
             sizeBox:SetPoint("TOPLEFT", textBox, "BOTTOMLEFT", 0, -12)
-            sizeBox:SetFontObject("CDM_Font14")
             sizeBox:SetJustifyH("CENTER")
-            sizeBox:SetAutoFocus(false)
             sizeBox:SetNumeric(true)
             sizeBox:SetMaxLetters(2)
             sizeBox:SetText(tostring(currentSize))
@@ -882,11 +875,9 @@ local function CreateBuffGroupsPanel(page)
             yOff = yOff - 30
 
             if ttsOnShowEnabled then
-                local ttsShowBox = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+                local ttsShowBox = UI.CreateEditBox(rc)
                 ttsShowBox:SetSize(140, 22)
                 ttsShowBox:SetPoint("TOPLEFT", 26, yOff)
-                ttsShowBox:SetFontObject("CDM_Font14")
-                ttsShowBox:SetAutoFocus(false)
                 ttsShowBox:SetMaxLetters(200)
                 ttsShowBox:SetText(ov.ttsOnShow or "")
                 ttsShowBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
@@ -926,11 +917,9 @@ local function CreateBuffGroupsPanel(page)
             yOff = yOff - 30
 
             if ttsOnHideEnabled then
-                local ttsHideBox = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+                local ttsHideBox = UI.CreateEditBox(rc)
                 ttsHideBox:SetSize(140, 22)
                 ttsHideBox:SetPoint("TOPLEFT", 26, yOff)
-                ttsHideBox:SetFontObject("CDM_Font14")
-                ttsHideBox:SetAutoFocus(false)
                 ttsHideBox:SetMaxLetters(200)
                 ttsHideBox:SetText(ov.ttsOnHide or "")
                 ttsHideBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
@@ -1225,10 +1214,9 @@ local function CreateBuffGroupsPanel(page)
                     operatorDropdown:SetDefaultText(label)
                     API:SetSpellStackGlow(currentSpecID, spellID, true, stackThreshold, stackOperator)
                 end)
-                local thresholdInput = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
-                thresholdInput:SetSize(60, 20)
+                local thresholdInput = UI.CreateEditBox(rc)
+                thresholdInput:SetSize(60, 22)
                 thresholdInput:SetPoint("LEFT", operatorDropdown, "RIGHT", 12, 0)
-                thresholdInput:SetAutoFocus(false)
                 thresholdInput:SetNumeric(true)
                 thresholdInput:SetMaxLetters(7)
                 thresholdInput:SetText(tostring(stackThreshold))
@@ -1263,10 +1251,9 @@ local function CreateBuffGroupsPanel(page)
                 sidLabel:SetPoint("TOPLEFT", 0, yOff)
                 sidLabel:SetText(L["Spell ID:"])
 
-                local sidInput = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
-                sidInput:SetSize(100, 20)
-                sidInput:SetPoint("LEFT", sidLabel, "RIGHT", 6, 0)
-                sidInput:SetAutoFocus(false)
+                local sidInput = UI.CreateEditBox(rc)
+                sidInput:SetSize(100, 22)
+                sidInput:SetPoint("LEFT", sidLabel, "RIGHT", 8, 0)
                 sidInput:SetNumeric(true)
                 sidInput:SetMaxLetters(10)
                 sidInput:SetText(tostring(spellID))
@@ -1276,10 +1263,9 @@ local function CreateBuffGroupsPanel(page)
                 durLabel:SetPoint("TOPLEFT", 0, yOff)
                 durLabel:SetText(L["Duration (sec):"])
 
-                local durInput = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
-                durInput:SetSize(60, 20)
-                durInput:SetPoint("LEFT", durLabel, "RIGHT", 6, 0)
-                durInput:SetAutoFocus(false)
+                local durInput = UI.CreateEditBox(rc)
+                durInput:SetSize(60, 22)
+                durInput:SetPoint("LEFT", durLabel, "RIGHT", 8, 0)
                 durInput:SetNumeric(true)
                 durInput:SetMaxLetters(5)
                 durInput:SetText(tostring(cbEntry and cbEntry.duration or ""))
@@ -1567,10 +1553,9 @@ local function CreateBuffGroupsPanel(page)
         sidLabel:SetPoint("TOPLEFT", 0, yOff)
         sidLabel:SetText(L["Spell ID:"])
 
-        local sidInput = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
-        sidInput:SetSize(100, 20)
-        sidInput:SetPoint("LEFT", sidLabel, "RIGHT", 6, 0)
-        sidInput:SetAutoFocus(false)
+        local sidInput = UI.CreateEditBox(rc)
+        sidInput:SetSize(100, 22)
+        sidInput:SetPoint("LEFT", sidLabel, "RIGHT", 8, 0)
         sidInput:SetNumeric(true)
         sidInput:SetMaxLetters(10)
         yOff = yOff - 28
@@ -1579,10 +1564,9 @@ local function CreateBuffGroupsPanel(page)
         durLabel:SetPoint("TOPLEFT", 0, yOff)
         durLabel:SetText(L["Duration (sec):"])
 
-        local durInput = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
-        durInput:SetSize(60, 20)
-        durInput:SetPoint("LEFT", durLabel, "RIGHT", 6, 0)
-        durInput:SetAutoFocus(false)
+        local durInput = UI.CreateEditBox(rc)
+        durInput:SetSize(60, 22)
+        durInput:SetPoint("LEFT", durLabel, "RIGHT", 8, 0)
         durInput:SetNumeric(true)
         durInput:SetMaxLetters(5)
         durInput:SetText("10")
@@ -2433,7 +2417,7 @@ local function CreateBuffGroupsTab(page)
     UI.StyleDivider(divider)
     divider:SetPoint("TOP", generalPage, "TOP", 0, 0)
 
-    local content = UI.CreateScrollableTab(generalPage, "CDM_BuffGeneralScrollFrame", 240)
+    local content = UI.CreateScrollableTab(generalPage, "CDM_BuffGeneralScrollFrame", 690)
     local header = UI.CreateHeader(content, L["Buff"])
     header:SetPoint("TOPLEFT", 0, 0)
     local width = ns.CreateIconSizeSlider(content, L["Width"], "sizeBuff", "w")
@@ -2445,6 +2429,136 @@ local function CreateBuffGroupsTab(page)
         API:Refresh("LAYOUT")
     end)
     spacing:SetPoint("TOPLEFT", height, "BOTTOMLEFT", 0, -10)
+
+    local growLabel = content:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+    growLabel:SetText(L["Grow Direction"])
+    growLabel:SetPoint("TOPLEFT", spacing, "BOTTOMLEFT", 0, -15)
+    local growDropdown = UI.CreateDropdown(content)
+    growDropdown:SetSize(200, 26)
+    growDropdown:SetPoint("TOPLEFT", growLabel, "BOTTOMLEFT", 0, -5)
+    local function GrowValue() return CDM.db.buffGrowDirection or "CENTER_H" end
+    UI.SetupValueDropdown(growDropdown, Shared.GROW_OPTIONS, GrowValue, function(value, label)
+        CDM.db.buffGrowDirection = value
+        growDropdown:SetDefaultText(label)
+        API:Refresh("LAYOUT")
+    end)
+    content:HookScript("OnShow", function() growDropdown:SetDefaultText(Shared.GetGrowLabel(GrowValue())) end)
+    growDropdown:SetDefaultText(Shared.GetGrowLabel(GrowValue()))
+
+    ns._CreateBuffViewerAnchorControls(content, growDropdown)
+end
+
+-- Anchor controls for the main Buff viewer, matching the buff group editor.
+-- Screen placement stays in editModePositions so Edit Mode and existing
+-- profiles keep working; other targets use the buffAnchor* keys.
+local BUFF_VIEWER_TARGETS = UI.AnchorTargets.buffViewer
+local BUFF_VIEWER_REL_LABELS = {
+    playerFrame = L["Player Frame Point"],
+    essential = L["Essential Viewer Point"],
+    castBar = L["Cast Bar Point"],
+    resources = L["Resource Bar Point"],
+}
+local DEFAULT_BUFF_POSITION = { point = "CENTER", x = 0, y = -149 }
+
+function ns._CreateBuffViewerAnchorControls(content, previous)
+    local function Target() return CDM.db.buffAnchorTarget or "screen" end
+    local function GetOffsets()
+        if Target() ~= "screen" then
+            return CDM.db.buffAnchorOffsetX or 0, CDM.db.buffAnchorOffsetY or 0
+        end
+        local positions = CDM.db.editModePositions
+        local p = positions and positions[CDM_C.VIEWERS.BUFF] and positions[CDM_C.VIEWERS.BUFF].Default
+        return p and p.x or DEFAULT_BUFF_POSITION.x, p and p.y or DEFAULT_BUFF_POSITION.y
+    end
+    local function SetOffset(axis, value)
+        if Target() ~= "screen" then
+            CDM.db[axis == "x" and "buffAnchorOffsetX" or "buffAnchorOffsetY"] = value
+        else
+            ns.EnsureViewerPosition(CDM_C.VIEWERS.BUFF, DEFAULT_BUFF_POSITION)[axis] = value
+        end
+        API:Refresh("LAYOUT")
+    end
+
+    local anchorHeader = UI.CreateHeader(content, L["Anchor"])
+    anchorHeader:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -25)
+
+    local targetLabel = content:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+    targetLabel:SetText(L["Anchor To"])
+    targetLabel:SetPoint("TOPLEFT", anchorHeader, "BOTTOMLEFT", 0, -14)
+
+    local targetDropdown = UI.CreateDropdown(content)
+    targetDropdown:SetSize(200, 26)
+    targetDropdown:SetPoint("TOPLEFT", targetLabel, "BOTTOMLEFT", 0, -5)
+
+    local anchorLabel = content:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+    anchorLabel:SetText(L["Anchor Point"])
+    anchorLabel:SetPoint("TOPLEFT", targetDropdown, "BOTTOMLEFT", 0, -14)
+    local anchorDropdown = UI.CreateDropdown(content)
+    anchorDropdown:SetSize(200, 26)
+    anchorDropdown:SetPoint("TOPLEFT", anchorLabel, "BOTTOMLEFT", 0, -5)
+    UI.SetupPositionDropdown(anchorDropdown,
+        function() return CDM.db.buffAnchorPoint or "BOTTOM" end,
+        function(value)
+            CDM.db.buffAnchorPoint = value
+            anchorDropdown:SetDefaultText(value)
+            API:Refresh("LAYOUT")
+        end)
+
+    local relLabel = content:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+    relLabel:SetPoint("TOPLEFT", anchorDropdown, "BOTTOMLEFT", 0, -14)
+    local relDropdown = UI.CreateDropdown(content)
+    relDropdown:SetSize(200, 26)
+    relDropdown:SetPoint("TOPLEFT", relLabel, "BOTTOMLEFT", 0, -5)
+    UI.SetupPositionDropdown(relDropdown,
+        function() return CDM.db.buffAnchorRelativeTo or "TOP" end,
+        function(value)
+            CDM.db.buffAnchorRelativeTo = value
+            relDropdown:SetDefaultText(value)
+            API:Refresh("LAYOUT")
+        end)
+
+    local x0, y0 = GetOffsets()
+    local xSlider = UI.CreateModernSlider(content, L["X Offset"], -840, 840, x0, function(v) SetOffset("x", v) end)
+    local ySlider = UI.CreateModernSlider(content, L["Y Offset"], -470, 470, y0, function(v) SetOffset("y", v) end)
+
+    local function UpdateControls()
+        local target = Target()
+        local isScreen = target == "screen"
+        targetDropdown:SetDefaultText(UI.GetOptionLabel(BUFF_VIEWER_TARGETS, target, L["Screen"]))
+        anchorLabel:SetShown(not isScreen)
+        anchorDropdown:SetShown(not isScreen)
+        relLabel:SetShown(not isScreen)
+        relDropdown:SetShown(not isScreen)
+        relLabel:SetText(BUFF_VIEWER_REL_LABELS[target] or L["Relative Point"])
+        anchorDropdown:SetDefaultText(CDM.db.buffAnchorPoint or "BOTTOM")
+        relDropdown:SetDefaultText(CDM.db.buffAnchorRelativeTo or "TOP")
+        xSlider:ClearAllPoints()
+        xSlider:SetPoint("TOPLEFT", isScreen and targetDropdown or relDropdown, "BOTTOMLEFT", 0, -15)
+        ySlider:SetPoint("TOPLEFT", xSlider, "BOTTOMLEFT", 0, -10)
+        local x, y = GetOffsets()
+        xSlider:UpdateUIValue(x)
+        ySlider:UpdateUIValue(y)
+    end
+
+    UI.SetupValueDropdown(targetDropdown, BUFF_VIEWER_TARGETS, Target, function(value)
+        if value ~= Target() and value ~= "screen" then
+            CDM.db.buffAnchorOffsetX, CDM.db.buffAnchorOffsetY = 0, 0
+        end
+        CDM.db.buffAnchorTarget = value
+        -- The legacy "move buffs down" option would override this choice.
+        CDM.db.moveBuffsDown = false
+        UpdateControls()
+        API:Refresh("LAYOUT")
+    end)
+
+    if ns.RegisterAnchorPositionUpdater then
+        ns.RegisterAnchorPositionUpdater("buff", function(x, y)
+            xSlider:UpdateUIValue(x)
+            ySlider:UpdateUIValue(y)
+        end)
+    end
+    content:HookScript("OnShow", UpdateControls)
+    UpdateControls()
 end
 
 API:RegisterConfigTab("buffgroups", L["Buffs"], CreateBuffGroupsTab, 8)

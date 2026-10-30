@@ -287,16 +287,46 @@ local function StyleSliderWithSteppers(control)
     UpdateFill()
 end
 
-local function StyleSliderInput(input)
-    local background, borders = CreateControlSurface(input)
-    background:SetColorTexture(0.025, 0.025, 0.03, 0.9)
-    SetControlBorder(borders, 0.22, 0.22, 0.25, 1)
-    input:HookScript("OnEditFocusGained", function()
-        SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, 0.65)
-    end)
-    input:HookScript("OnEditFocusLost", function()
-        SetControlBorder(borders, 0.22, 0.22, 0.25, 1)
-    end)
+-- Callers routinely SetScript OnEditFocusLost/OnEnter after creation, which
+-- would drop hooked styling, so a child frame polls the state while visible.
+local function StyleEditBox(editBox, surface)
+    surface = surface or editBox
+    local background, borders = CreateControlSurface(surface)
+    local watcher = CreateFrame("Frame", nil, surface)
+    local lastState
+
+    local function UpdateStyle()
+        local enabled = editBox:IsEnabled()
+        local state = (not enabled and 1) or (editBox:HasFocus() and 2) or (surface:IsMouseOver() and 3) or 4
+        if state == lastState then return end
+        lastState = state
+        background:SetColorTexture(0.025, 0.025, 0.03, enabled and 0.9 or 0.45)
+        if state == 2 then
+            SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, 0.65)
+        elseif state == 3 then
+            SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, 0.35)
+        else
+            SetControlBorder(borders, 0.25, 0.25, 0.28, enabled and 1 or 0.45)
+        end
+    end
+
+    watcher:SetScript("OnUpdate", UpdateStyle)
+    UpdateStyle()
+end
+
+-- Flat replacement for InputBoxTemplate. The frame bounds are the visible box;
+-- the template's art extended 5px past the left edge.
+function UI.CreateEditBox(parent, fontObject)
+    local editBox = CreateFrame("EditBox", nil, parent)
+    editBox:SetFontObject(fontObject or "CDM_Font14")
+    editBox:SetTextInsets(6, 6, 0, 0)
+    editBox:SetAutoFocus(false)
+    -- Same defaults as InputBoxTemplate; callers may replace any of them.
+    editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    editBox:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+    editBox:SetScript("OnEditFocusLost", function(self) self:HighlightText(0, 0) end)
+    StyleEditBox(editBox)
+    return editBox
 end
 
 function UI.ApplyCrossIcon(button)
@@ -575,7 +605,7 @@ function UI.CreateModernSlider(parent, label, minVal, maxVal, currentVal, onValu
     eb:SetJustifyH("CENTER")
     eb:SetTextInsets(0, 0, 0, 0)
     eb:SetAutoFocus(false)
-    StyleSliderInput(eb)
+    StyleEditBox(eb)
     panel.Input = eb
     local suppressOnValueChanged = false
 
@@ -702,7 +732,7 @@ function UI.CreateModernSliderPrecise(parent, label, minVal, maxVal, currentVal,
     eb:SetJustifyH("CENTER")
     eb:SetTextInsets(0, 0, 0, 0)
     eb:SetAutoFocus(false)
-    StyleSliderInput(eb)
+    StyleEditBox(eb)
     panel.Input = eb
     local suppressOnValueChanged = false
 
@@ -1073,6 +1103,56 @@ UI.PositionOptions = {
     "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT",
 }
 
+-- "Anchor To" choices, shared by the Options pages and Anchor Mode.
+UI.AnchorTargets = {
+    cooldownGroup = {
+        { label = L["Screen"], value = "screen" },
+        { label = L["Player Frame"], value = "playerFrame" },
+        { label = L["Essential Viewer"], value = "essential" },
+        { label = L["Utility Viewer"], value = "utility" },
+        { label = L["Buff Viewer"], value = "buff" },
+        { label = L["Cast Bar"], value = "castBar" },
+        { label = L["Resource Bar"], value = "resources" },
+    },
+    buffGroup = {
+        { label = L["Screen"], value = "screen" },
+        { label = L["Player Frame"], value = "playerFrame" },
+        { label = L["Essential Viewer"], value = "essential" },
+        { label = L["Buff Viewer"], value = "buff" },
+        { label = L["Cast Bar"], value = "castBar" },
+        { label = L["Resource Bar"], value = "resources" },
+    },
+    buffBarGroup = {
+        { label = L["Screen"], value = "screen" },
+        { label = L["Player Frame"], value = "playerFrame" },
+        { label = L["Essential Viewer"], value = "essential" },
+        { label = L["Buff Viewer"], value = "buff" },
+        { label = L["Buff Bar Viewer"], value = "buffBar" },
+        { label = L["Cast Bar"], value = "castBar" },
+        { label = L["Resource Bar"], value = "resources" },
+    },
+    buffViewer = {
+        { label = L["Screen"], value = "screen" },
+        { label = L["Player Frame"], value = "playerFrame" },
+        { label = L["Essential Viewer"], value = "essential" },
+        { label = L["Cast Bar"], value = "castBar" },
+        { label = L["Resource Bar"], value = "resources" },
+    },
+}
+
+function UI.GetCastBarAnchorTargets()
+    local options = {
+        { value = "screen", label = L["Screen"] },
+        { value = "playerFrame", label = L["Player Frame"] },
+        { value = "essential", label = L["Essential Viewer"] },
+        { value = "utility", label = L["Utility Viewer"] },
+    }
+    if CDM.db.resourcesEnabled ~= false then
+        options[#options + 1] = { value = "resources", label = L["Resources"] }
+    end
+    return options
+end
+
 UI.GlowTypeOptions = {
     { value = "pixel", label = L["Pixel Glow"] },
     { value = "autocast", label = L["Autocast Glow"] },
@@ -1197,15 +1277,8 @@ do
 end
 
 function UI.CreateScrollableEditBox(parent, width, height, editWidth)
-    local boxFrame = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    local boxFrame = CreateFrame("Frame", nil, parent)
     boxFrame:SetSize(width, height)
-    boxFrame:SetBackdrop({
-        bgFile = CDM_C.TEX_WHITE8X8,
-        edgeFile = CDM_C.TEX_WHITE8X8,
-        edgeSize = 1,
-    })
-    boxFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
-    boxFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, boxFrame, "UIPanelScrollFrameTemplate")
     UI.StyleScrollBar(scrollFrame)
@@ -1219,6 +1292,7 @@ function UI.CreateScrollableEditBox(parent, width, height, editWidth)
     editBox:SetAutoFocus(false)
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     scrollFrame:SetScrollChild(editBox)
+    StyleEditBox(editBox, boxFrame)
 
     local function FocusEditBox()
         editBox:SetFocus()
@@ -1318,10 +1392,9 @@ function UI.ShowCustomIconPopup(current, onConfirm)
         hint:SetJustifyH("LEFT")
         UI.SetTextFaint(hint)
 
-        local editBox = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
-        editBox:SetSize(120, 20)
-        editBox:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 6, -14)
-        editBox:SetAutoFocus(false)
+        local editBox = UI.CreateEditBox(window)
+        editBox:SetSize(120, 22)
+        editBox:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -14)
         editBox:SetNumeric(true)
         editBox:SetMaxLetters(10)
 
@@ -1331,7 +1404,7 @@ function UI.ShowCustomIconPopup(current, onConfirm)
         preview:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
         local status = window:CreateFontString(nil, "ARTWORK", "CDM_Font12")
-        status:SetPoint("TOPLEFT", editBox, "BOTTOMLEFT", -6, -10)
+        status:SetPoint("TOPLEFT", editBox, "BOTTOMLEFT", 0, -10)
         status:SetWidth(300)
         status:SetJustifyH("LEFT")
 

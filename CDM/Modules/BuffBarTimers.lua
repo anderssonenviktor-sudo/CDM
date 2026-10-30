@@ -1385,8 +1385,7 @@ local function UpdateGroupContainers()
         local container = bbDescriptor:GetOrCreateContainer(groupIndex)
         bbDescriptor:UpdateContainerPosition(groupIndex, groupData, GetContainerForAnchorTarget)
         local at = groupData.anchorTarget or "screen"
-        if not container:IsShown() and at ~= "essential" and at ~= "buff"
-            and at ~= "buffBar" and at ~= "playerFrame" then
+        if not container:IsShown() and not GCU.IsTargetAnchored(at) then
             container:Show()
         end
         active[groupIndex] = true

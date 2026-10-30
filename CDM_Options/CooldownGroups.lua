@@ -633,17 +633,13 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 posKey = "chargePosition", xKey = "chargeOffsetX", yKey = "chargeOffsetY",
                 sizeDefault = 15, posDefault = "BOTTOMRIGHT",
             },
-            anchorTargets = {
-                { label = L["Screen"], value = "screen" },
-                { label = L["Player Frame"], value = "playerFrame" },
-                { label = L["Essential Viewer"], value = "essential" },
-                { label = L["Utility Viewer"], value = "utility" },
-                { label = L["Buff Viewer"], value = "buff" },
-            },
+            anchorTargets = UI.AnchorTargets.cooldownGroup,
             anchorRelLabels = {
                 playerFrame = L["Player Frame Point"],
                 buff = L["Buff Viewer Point"],
                 utility = L["Utility Viewer Point"],
+                castBar = L["Cast Bar Point"],
+                resources = L["Resource Bar Point"],
             },
         })
         if ns.RegisterAnchorPositionUpdater then
@@ -1137,44 +1133,48 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 yOff = yOff - 30
             end
 
-            local readyGlowEnabled = auraOv and auraOv.readyGlowEnabled or false
-            local readyGlowCheckbox = UI.CreateModernCheckbox(
-                rc,
-                L["Glow When Ready"],
-                readyGlowEnabled,
-                function(checked)
-                    local ov
-                    if groupIndex then
-                        ov = EnsureSpellOverride(groupIndex, spellID)
-                    else
-                        ov = EnsureUngroupedOverrideEntry(spellID)
-                    end
+            local glowState = auraOv and auraOv.glowState or nil
+            local glowStateOptions = {
+                { value = nil, label = L["None"] },
+                { value = "always", label = L["Always"] },
+                { value = "ready", label = L["Ready"] },
+                { value = "cooldown", label = L["On Cooldown"] },
+                { value = "active", label = L["Active"] },
+                { value = "inactive", label = L["Inactive"] },
+            }
+
+            local glowStateLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+            glowStateLabel:SetText(L["Glow State"])
+            glowStateLabel:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 22
+
+            local glowStateDropdown = RegisterRightPanelDropdown(UI.CreateDropdown(rc))
+            glowStateDropdown:SetWidth(220)
+            glowStateDropdown:SetPoint("TOPLEFT", 0, yOff)
+            glowStateDropdown:SetDefaultText(UI.GetOptionLabel(glowStateOptions, glowState, L["None"]))
+            UI.SetupValueDropdown(glowStateDropdown, glowStateOptions,
+                function() return glowState end,
+                function(value)
+                    local ov = EnsureCooldownOverride()
                     if not ov then return end
-                    ov.readyGlowEnabled = checked or nil
+                    ov.glowState = value
                     SaveAndRefresh()
                     ShowSpellSettings(spellID, groupIndex)
-                end
-            )
-            readyGlowCheckbox:SetPoint("TOPLEFT", 0, yOff)
-            yOff = yOff - 36
+                end)
+            yOff = yOff - 40
 
-            if readyGlowEnabled then
-                local rgcLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-                rgcLabel:SetText(L["Glow Color:"])
-                rgcLabel:SetPoint("TOPLEFT", 20, yOff)
-                local rgcInit = (auraOv and auraOv.readyGlowColor) or { r = 1, g = 1, b = 1 }
-                local rgcPicker = UI.CreateSimpleColorPicker(rc, rgcInit, function(r, g, b)
-                    local ov
-                    if groupIndex then
-                        ov = EnsureSpellOverride(groupIndex, spellID)
-                    else
-                        ov = EnsureUngroupedOverrideEntry(spellID)
-                    end
+            if glowState then
+                local gscLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+                gscLabel:SetText(L["Glow Color:"])
+                gscLabel:SetPoint("TOPLEFT", 20, yOff)
+                local gscInit = auraOv.glowStateColor or { r = 1, g = 1, b = 1 }
+                local gscPicker = UI.CreateSimpleColorPicker(rc, gscInit, function(r, g, b)
+                    local ov = EnsureCooldownOverride()
                     if not ov then return end
-                    ov.readyGlowColor = { r = r, g = g, b = b }
+                    ov.glowStateColor = { r = r, g = g, b = b }
                     SaveAndRefresh()
                 end)
-                rgcPicker:SetPoint("LEFT", rgcLabel, "RIGHT", 6, 0)
+                gscPicker:SetPoint("LEFT", gscLabel, "RIGHT", 6, 0)
                 yOff = yOff - 30
             end
 
@@ -1702,10 +1702,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
             inputLabel:SetPoint("TOPLEFT", window, "TOPLEFT", 24, -42)
             inputLabel:SetText("ItemID:")
 
-            local editBox = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
+            local editBox = UI.CreateEditBox(window)
             editBox:SetSize(150, 24)
             editBox:SetPoint("LEFT", inputLabel, "RIGHT", 12, 0)
-            editBox:SetAutoFocus(false)
             editBox:SetNumeric(true)
             editBox:SetMaxLetters(7)
             editBox:SetJustifyH("CENTER")

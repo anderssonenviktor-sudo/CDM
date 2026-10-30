@@ -346,14 +346,14 @@ function API:AddMissingBlizzardTracking(prepared)
         local ok, status = pcall(provider.SetCooldownToCategory, provider, entry.cooldownID, entry.category)
         if ok and status == successStatus then added = added + 1 else failed = failed + 1 end
     end
+    -- Changing Blizzard's tracking from addon code taints the cooldown viewers
+    -- for the rest of the session; in combat they then fail on secret values.
+    -- Save without rebuilding the viewers here; the caller reloads the UI.
     if added > 0 then
         local ok = pcall(settings.SaveCurrentLayout, settings)
         if not ok then return false, L["Blizzard cooldown tracking changed but could not be saved."] end
-        if settings.RefreshLayout then pcall(settings.RefreshLayout, settings) end
-        CDM:Refresh("CD_DATA")
-        CDM:Refresh("BUFF_DATA")
     end
-    return true, string.format(L["Added %d spells to Blizzard tracking (%d unavailable)."], added, failed)
+    return true, string.format(L["Added %d spells to Blizzard tracking (%d unavailable)."], added, failed), added
 end
 
 local function GetCategoryOrder()
@@ -516,9 +516,30 @@ local function PrepareProfileCollection(payload)
     return prepared
 end
 
+-- Strings from other addons are converted into a CDM payload first, then go
+-- through the same validation and free-name logic as a CDM import.
+local function PrepareAdapterImport(adapter, encodedString)
+    local converted, convertErr = adapter.Convert(encodedString)
+    if not converted then return nil, convertErr end
+    local prepared, err = BuildPreparedImport({
+        profile_export_version = 1, addon = AddonName,
+        profileName = converted.profileName, data = converted.profileData,
+    })
+    if not prepared then return nil, err end
+    local tracking = ValidateBlizzardTracking(converted.blizzardTracking)
+    if tracking then prepared.blizzardTracking = tracking end
+    prepared.sourceAddon = adapter.id
+    prepared.sourceLabel = adapter.label
+    prepared.report = converted.report
+    prepared.requiresName = true
+    return prepared
+end
+
 function API:PrepareProfileImport(encodedString)
     if type(encodedString) ~= "string" or encodedString == "" then return nil, L["No import string provided"] end
     if not ProfileIO then return nil, L["Invalid profile data"] end
+    local adapter = ns.ImportAdapters and ns.ImportAdapters.Find(encodedString)
+    if adapter then return PrepareAdapterImport(adapter, encodedString) end
     local payload, decodeErr = ProfileIO:DecodePayload(encodedString)
     if not payload then return nil, MapImportErrorCode(decodeErr) end
     if payload.profile_collection_version ~= nil or payload.profiles ~= nil then return PrepareProfileCollection(payload) end
@@ -658,7 +679,7 @@ local function ShowBlizzardTrackingNotice(prepared, statusFont, importMessage)
         local add = UI.CreateTextButton(window)
         add:SetSize(155, 26)
         add:SetPoint("BOTTOMLEFT", 18, 18)
-        add:SetText(L["Add missing spells"])
+        add:SetText(L["Add and reload"])
         local keep = UI.CreateTextButton(window)
         keep:SetSize(155, 26)
         keep:SetPoint("LEFT", add, "RIGHT", 8, 0)
@@ -679,7 +700,7 @@ local function ShowBlizzardTrackingNotice(prepared, statusFont, importMessage)
     end
     if #missing > #names then names[#names + 1] = string.format(L["and %d more"], #missing - #names) end
     local message = string.format(
-        L["This import includes %d entries that are not tracked in Blizzard's cooldown settings. Add them now? Existing tracked entries will stay enabled."],
+        L["This import includes %d entries that are not tracked in Blizzard's cooldown settings. Add them now? Existing tracked entries will stay enabled. Your UI reloads afterwards so Blizzard's cooldown viewer keeps working in combat."],
         #missing
     )
     if prepared.sourceAddon == "Ayije_CDM" then
@@ -688,12 +709,126 @@ local function ShowBlizzardTrackingNotice(prepared, statusFont, importMessage)
     trackingNotice.message:SetText(message)
     trackingNotice.list:SetText(table.concat(names, ", "))
     trackingNotice.add:SetScript("OnClick", function()
-        local ok, detail = API:AddMissingBlizzardTracking(prepared)
+        local ok, detail, added = API:AddMissingBlizzardTracking(prepared)
         SetImportStatus(statusFont, ok, ok and (importMessage .. " " .. detail) or detail)
         trackingNotice.popup:Hide()
+        if ok and added and added > 0 then
+            print("|cff00ccff[CDM]|r " .. detail .. " " .. L["Reloading the UI."])
+            ReloadUI()
+        end
     end)
     trackingNotice.popup:Show()
     return true
+end
+
+-- Converted imports ask for the new profile's name. A taken name is refused
+-- rather than overwritten.
+local namePrompt
+local function ShowImportNamePrompt(prepared, onConfirm)
+    if not namePrompt or namePrompt.popup:GetParent() ~= ns.ConfigFrame then
+        local popup = UI.CreateModalOverlay()
+        local window = popup.window
+        window:SetSize(400, 200)
+        local title = UI.CreateHeader(window, L["Name the New Profile"])
+        title:ClearAllPoints()
+        title:SetPoint("TOPLEFT", 18, -42)
+        local message = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+        message:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -10)
+        message:SetWidth(364)
+        message:SetJustifyH("LEFT")
+        message:SetWordWrap(true)
+        UI.SetTextMuted(message)
+        local editBox = UI.CreateEditBox(window)
+        editBox:SetSize(240, 22)
+        editBox:SetPoint("TOPLEFT", message, "BOTTOMLEFT", 0, -12)
+        editBox:SetMaxLetters(64)
+        local errorText = window:CreateFontString(nil, "ARTWORK", "CDM_Font12")
+        errorText:SetPoint("TOPLEFT", editBox, "BOTTOMLEFT", 0, -8)
+        errorText:SetWidth(364)
+        errorText:SetJustifyH("LEFT")
+        errorText:SetWordWrap(true)
+        local confirm = UI.CreateTextButton(window)
+        confirm:SetSize(90, 26)
+        confirm:SetPoint("BOTTOMRIGHT", -116, 18)
+        confirm:SetText(L["Import"])
+        local cancel = UI.CreateTextButton(window)
+        cancel:SetSize(90, 26)
+        cancel:SetPoint("BOTTOMRIGHT", -18, 18)
+        cancel:SetText(L["Cancel"])
+        cancel:SetScript("OnClick", function() popup:Hide() end)
+        popup:HookScript("OnHide", function() editBox:ClearFocus() end)
+        namePrompt = { popup = popup, message = message, editBox = editBox, errorText = errorText, confirm = confirm }
+    end
+
+    local function Submit()
+        local name = strtrim(namePrompt.editBox:GetText() or "")
+        if name == "" then
+            namePrompt.errorText:SetText(L["Enter a profile name."])
+            UI.SetTextError(namePrompt.errorText)
+            return
+        end
+        local profiles = CDM_RebornDB and CDM_RebornDB.profiles
+        if profiles and profiles[name] then
+            namePrompt.errorText:SetText(string.format(L["A profile named '%s' already exists. Choose another name."], name))
+            UI.SetTextError(namePrompt.errorText)
+            return
+        end
+        namePrompt.popup:Hide()
+        prepared.profileName = name
+        onConfirm(prepared)
+    end
+
+    namePrompt.message:SetText(string.format(L["Converted from %s. Existing profiles are not changed."],
+        prepared.sourceLabel or prepared.sourceAddon or ""))
+    namePrompt.editBox:SetText(prepared.profileName or "")
+    namePrompt.errorText:SetText("")
+    namePrompt.editBox:SetScript("OnEnterPressed", Submit)
+    namePrompt.confirm:SetScript("OnClick", Submit)
+    namePrompt.popup:Show()
+    namePrompt.editBox:SetFocus()
+    namePrompt.editBox:HighlightText()
+end
+
+-- Lists what a converted import skipped or approximated. onClose runs once,
+-- however the popup is dismissed.
+local reportPopup
+local function ShowImportReport(prepared, onClose)
+    if not reportPopup or reportPopup.popup:GetParent() ~= ns.ConfigFrame then
+        local popup = UI.CreateModalOverlay()
+        local window = popup.window
+        window:SetSize(520, 340)
+        local title = UI.CreateHeader(window, L["Import Report"])
+        title:ClearAllPoints()
+        title:SetPoint("TOPLEFT", 18, -42)
+        local message = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+        message:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -10)
+        message:SetWidth(484)
+        message:SetJustifyH("LEFT")
+        message:SetWordWrap(true)
+        UI.SetTextMuted(message)
+        local boxFrame, editBox = UI.CreateScrollableEditBox(window, 484, 170, 440)
+        boxFrame:SetPoint("TOPLEFT", message, "BOTTOMLEFT", 0, -10)
+        local close = UI.CreateTextButton(window)
+        close:SetSize(90, 26)
+        close:SetPoint("BOTTOMRIGHT", -18, 18)
+        close:SetText(L["Close"])
+        close:SetScript("OnClick", function() popup:Hide() end)
+        reportPopup = { popup = popup, message = message, editBox = editBox }
+        popup:HookScript("OnHide", function()
+            editBox:ClearFocus()
+            local callback = reportPopup.onClose
+            reportPopup.onClose = nil
+            if callback then callback() end
+        end)
+    end
+    local report = prepared.report
+    reportPopup.message:SetText(string.format(
+        L["Imported from %s as '%s'. Positions are approximate; adjust them in Anchor Mode. These settings were approximated or not imported:"],
+        prepared.sourceLabel or prepared.sourceAddon or "", prepared.profileName or ""))
+    reportPopup.editBox:SetText(report:ToText())
+    reportPopup.editBox:SetCursorPosition(0)
+    reportPopup.onClose = onClose
+    reportPopup.popup:Show()
 end
 
 StaticPopupDialogs["CDM_CONFIRM_IMPORT_ALL_AYIJE_PROFILES"] = {
@@ -720,7 +855,7 @@ local function CreateImportExportTab(page)
 
     local supportedLabel = page:CreateFontString(nil, "ARTWORK", "CDM_Font12")
     supportedLabel:SetPoint("TOPLEFT", importDesc, "BOTTOMLEFT", 0, -4)
-    supportedLabel:SetText(L["Supports CDM and AyijeCDM export strings."])
+    supportedLabel:SetText(L["Supports CDM, AyijeCDM and SkironCooldownManager (SCM) export strings."])
     UI.SetTextMuted(supportedLabel)
 
     local importBtn = UI.CreateTextButton(page)
@@ -760,9 +895,16 @@ local function CreateImportExportTab(page)
     local function ShowImportResult(success, message, prepared)
         SetImportStatus(importStatus, success, message)
         if not success then return end
-        local showingTracking = ShowBlizzardTrackingNotice(prepared, importStatus, message)
-        if not showingTracking and prepared.sourceAddon == "Ayije_CDM" then
-            ShowExternalImportNotice()
+        local function ShowNotices()
+            local showingTracking = ShowBlizzardTrackingNotice(prepared, importStatus, message)
+            if not showingTracking and prepared.sourceAddon == "Ayije_CDM" then
+                ShowExternalImportNotice()
+            end
+        end
+        if prepared.report and not prepared.report:IsEmpty() then
+            ShowImportReport(prepared, ShowNotices)
+        else
+            ShowNotices()
         end
     end
 
@@ -798,8 +940,15 @@ local function CreateImportExportTab(page)
                     return
                 end
                 popup:Hide()
-                local success, message, applied = ApplyPreparedImport(prepared)
-                ShowImportResult(success, message, applied)
+                local function Apply(ready)
+                    local success, message, applied = ApplyPreparedImport(ready)
+                    ShowImportResult(success, message, applied)
+                end
+                if prepared.requiresName then
+                    ShowImportNamePrompt(prepared, Apply)
+                else
+                    Apply(prepared)
+                end
             end)
 
             local cancel = UI.CreateTextButton(window)

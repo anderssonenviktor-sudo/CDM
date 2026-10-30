@@ -1367,7 +1367,7 @@ function CDM:CreatePlayerCastBar()
     end
 end
 
-function CDM:UpdatePlayerCastBar()
+local function UpdatePlayerCastBar(self)
     if not self.castBarFrame then
         if CfgVal("castBarEnabled", true) then
             self:CreatePlayerCastBar()
@@ -1393,6 +1393,15 @@ function CDM:UpdatePlayerCastBar()
     UpdateCastBarFromConfig(self.castBarFrame)
     UpdateContainerPosition()
     UpdatePreviewState()
+end
+
+-- Resource layout changes also arrive here (UpdateAncillaryLayouts), so this
+-- is the one place groups anchored to the cast bar or resources re-resolve.
+function CDM:UpdatePlayerCastBar()
+    UpdatePlayerCastBar(self)
+    if self.RefreshExternalGroupAnchors then
+        self:RefreshExternalGroupAnchors()
+    end
 end
 
 CDM:RegisterRefreshCallback("playerCastBar", function()

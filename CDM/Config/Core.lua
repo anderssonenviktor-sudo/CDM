@@ -413,7 +413,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 43
+local DB_SCHEMA_VERSION = 44
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1557,6 +1557,40 @@ local PROFILE_MIGRATIONS = {
                 for _, specData in pairs(legacy) do
                     if type(specData) == "table" then HideNames(specData.bars) end
                 end
+            end
+        end,
+    },
+    {
+        version = 44,
+        run = function(profile)
+            local function MigrateEntry(entry)
+                if type(entry) ~= "table" then return end
+                if entry.readyGlowEnabled == true and entry.glowState == nil then
+                    entry.glowState = "ready"
+                end
+                if entry.readyGlowColor ~= nil and entry.glowStateColor == nil then
+                    entry.glowStateColor = entry.readyGlowColor
+                end
+                entry.readyGlowEnabled = nil
+                entry.readyGlowColor = nil
+            end
+            local function MigrateMap(map)
+                if type(map) ~= "table" then return end
+                for _, entry in pairs(map) do MigrateEntry(entry) end
+            end
+            local groups = profile.cooldownGroups
+            if type(groups) == "table" then
+                for _, specGroups in pairs(groups) do
+                    if type(specGroups) == "table" then
+                        for _, group in pairs(specGroups) do
+                            if type(group) == "table" then MigrateMap(group.spellOverrides) end
+                        end
+                    end
+                end
+            end
+            local ungrouped = profile.ungroupedCooldownOverrides
+            if type(ungrouped) == "table" then
+                for _, specOverrides in pairs(ungrouped) do MigrateMap(specOverrides) end
             end
         end,
     },

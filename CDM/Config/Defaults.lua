@@ -250,6 +250,15 @@ CDM.defaults = {
     moveBuffsDownOffset = 0,
     moveBuffsDownFallback = "lastResource",
 
+    -- Main Buff viewer anchor. "screen" keeps editModePositions; other targets
+    -- use the point pair and offsets below.
+    buffAnchorTarget = "screen",
+    buffAnchorPoint = "BOTTOM",
+    buffAnchorRelativeTo = "TOP",
+    buffAnchorOffsetX = 0,
+    buffAnchorOffsetY = 0,
+    buffGrowDirection = "CENTER_H", -- RIGHT, LEFT, UP, DOWN, CENTER_H, CENTER_V
+
     -- Trinket icons in the cooldown viewer: per-spec tracked slots,
     -- cooldownTrinkets[specID] = { [13] = true, [14] = true }.
     cooldownTrinkets = {},
