@@ -289,7 +289,7 @@ end
 local function SetTrackerContainerAnchor(container, anchorPoint, offsetX, offsetY, targetFrame, containerAnchorOverride)
     container:ClearAllPoints()
     local containerAnchor = containerAnchorOverride or INVERTED_ANCHORS[anchorPoint] or anchorPoint
-    Pixel.SetPoint(container, containerAnchor, targetFrame, anchorPoint, offsetX, offsetY)
+    Pixel.SetGridPoint(container, containerAnchor, targetFrame, anchorPoint, offsetX, offsetY)
 end
 
 function CDM.PositionTrackerIcons(container, frames, size, spacing, anchorPoint)

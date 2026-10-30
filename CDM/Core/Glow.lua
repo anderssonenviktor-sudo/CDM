@@ -554,15 +554,17 @@ local function EnsureBuffGlowTargetHooks(frame)
     end)
 end
 
-function Glow:RequestBuffGlow(frame, enabled, overrideColor, sourceID)
+function Glow:RequestBuffGlow(frame, enabled, overrideColor, sourceID, overrideType)
     if not frame or not LCG then return end
 
     local frameData = GetFrameData(frame)
 
     frameData.cdmBuffGlowWanted = enabled and true or false
     frameData.cdmBuffGlowOverrideColor = overrideColor
-    frameData.cdmBuffGlowOverrideType = enabled and sourceID and CDM.GetSpellGlowType
-        and CDM:GetSpellGlowType(CDM:GetCurrentSpecID(), sourceID) or nil
+    if enabled and not overrideType and sourceID and CDM.GetSpellGlowType then
+        overrideType = CDM:GetSpellGlowType(CDM:GetCurrentSpecID(), sourceID)
+    end
+    frameData.cdmBuffGlowOverrideType = enabled and overrideType or nil
     frameData.cdmBuffGlowSourceID = sourceID
 
     EnsureBuffGlowTargetHooks(frame)
@@ -837,6 +839,7 @@ function Glow:RefreshActiveGlows()
         if frameData.cdmGlowActive then
             if frameData.cdmSpellAlertGlow and CDM.GetCooldownGlowColorOverride then
                 frameData.cdmGlowOverrideColor = CDM:GetCooldownGlowColorOverride(frame)
+                frameData.cdmGlowRequestedType = CDM:GetCooldownGlowTypeOverride(frame)
             end
             local stopFn = glowStopFunctions[frameData.cdmGlowType]
             DetachStackMasks(frame)
@@ -865,12 +868,15 @@ function Glow:HookAlertManager()
         local frameData = GetFrameData(frame)
         local overrideColor = CDM.GetCooldownGlowColorOverride
             and CDM:GetCooldownGlowColorOverride(frame) or nil
-        if frameData.cdmGlowActive and frameData.cdmGlowType == glowCache.type
+        local overrideType = CDM.GetCooldownGlowTypeOverride
+            and CDM:GetCooldownGlowTypeOverride(frame) or nil
+        local effectiveType = glowStartFunctions[overrideType] and overrideType or glowCache.type
+        if frameData.cdmGlowActive and frameData.cdmGlowType == effectiveType
             and ColorsMatch(frameData.cdmGlowOverrideColor, overrideColor) then
             return
         end
         frameData.cdmSpellAlertGlow = true
-        ShowCustomGlow(frame, overrideColor)
+        ShowCustomGlow(frame, overrideColor, overrideType)
         if frameData.cdmReadyGlowActive then
             Glow:RequestBuffGlow(frame, false)
             frameData.cdmReadyGlowActive = false

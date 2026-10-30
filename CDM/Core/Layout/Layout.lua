@@ -548,14 +548,14 @@ function CDM:UpdateBuffContainerPosition()
         local offsetY = tonumber(db.moveBuffsDownOffset) or 0
         if topBar then
             buffContainer:ClearAllPoints()
-            Pixel.SetPoint(buffContainer, "BOTTOM", topBar, "TOP", 0, offsetY)
+            Pixel.SetGridPoint(buffContainer, "BOTTOM", topBar, "TOP", 0, offsetY)
             return
         end
         if fallback == "essential" then
             local essContainer = self.anchorContainers[VIEWERS.ESSENTIAL]
             if essContainer and essContainer:IsShown() then
                 buffContainer:ClearAllPoints()
-                Pixel.SetPoint(buffContainer, "BOTTOM", essContainer, "TOP", 0, offsetY)
+                Pixel.SetGridPoint(buffContainer, "BOTTOM", essContainer, "TOP", 0, offsetY)
                 return
             end
         end

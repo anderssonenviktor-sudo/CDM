@@ -759,24 +759,69 @@ function UI.CreateModernCheckbox(parent, label, initialValue, onChange)
     frame:SetSize(400, 26)
 
     local checkbox = CreateFrame("CheckButton", nil, frame)
-    checkbox:SetSize(26, 26)
+    checkbox:SetSize(18, 18)
     checkbox:SetPoint("LEFT", 0, 0)
 
-    checkbox:SetNormalAtlas("checkbox-minimal")
-    checkbox:SetPushedAtlas("checkbox-minimal")
-    checkbox:SetCheckedTexture("checkmark-minimal")
-    checkbox:GetCheckedTexture():SetAtlas("checkmark-minimal")
+    local background, borders = CreateControlSurface(checkbox)
 
-    local highlight = checkbox:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints()
-    highlight:SetAtlas("checkbox-minimal")
-    highlight:SetAlpha(0.3)
+    local fill = checkbox:CreateTexture(nil, "ARTWORK")
+    fill:SetPoint("TOPLEFT", 4, -4)
+    fill:SetPoint("BOTTOMRIGHT", -4, 4)
+    fill:SetColorTexture(1, 1, 1, 1)
+
+    local fillFade = fill:CreateAnimationGroup()
+    local fadeIn = fillFade:CreateAnimation("Alpha")
+    fadeIn:SetFromAlpha(0)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetDuration(0.1)
 
     local text = frame:CreateFontString(nil, "ARTWORK", "CDM_Font14")
     text:SetPoint("LEFT", checkbox, "RIGHT", 8, 0)
     text:SetText(label)
 
+    local hovered = false
+
+    local function UpdateStyle()
+        local enabled = checkbox:IsEnabled()
+        local checked = checkbox:GetChecked()
+        if not enabled then
+            background:SetColorTexture(0.035, 0.035, 0.04, 0.5)
+            SetControlBorder(borders, 0.15, 0.15, 0.17, 1)
+        elseif checked then
+            background:SetColorTexture(0.05, 0.05, 0.055, 0.95)
+            SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, hovered and 1 or 0.85)
+        elseif hovered then
+            background:SetColorTexture(0.095, 0.095, 0.105, 0.95)
+            SetControlBorder(borders, GOLD.r, GOLD.g, GOLD.b, 0.6)
+        else
+            background:SetColorTexture(0.05, 0.05, 0.055, 0.95)
+            SetControlBorder(borders, 0.25, 0.25, 0.28, 1)
+        end
+
+        fill:SetShown(checked and true or false)
+        if hovered and enabled then
+            fill:SetVertexColor(1, 0.9, 0.35, 1)
+        else
+            fill:SetVertexColor(GOLD.r, GOLD.g, GOLD.b, enabled and 1 or 0.4)
+        end
+
+        if not enabled then
+            text:SetTextColor(0.4, 0.4, 0.4, 1)
+        elseif checked or hovered then
+            text:SetTextColor(1, 1, 1, 1)
+        else
+            text:SetTextColor(0.55, 0.55, 0.55, 1)
+        end
+    end
+
+    -- Extend the click area over the label so the whole row toggles.
+    local function UpdateHitRect()
+        local labelWidth = math.ceil(text:GetStringWidth() or 0)
+        checkbox:SetHitRectInsets(0, -(labelWidth + 8), -4, -4)
+    end
+
     checkbox:SetChecked(initialValue or false)
+    UpdateHitRect()
 
     checkbox:SetScript("OnClick", function(self)
         local checked = self:GetChecked()
@@ -784,6 +829,23 @@ function UI.CreateModernCheckbox(parent, label, initialValue, onChange)
             onChange(checked)
         end
     end)
+
+    -- PostClick (not OnClick) so the style survives callers replacing OnClick.
+    checkbox:SetScript("PostClick", function(self)
+        if self:GetChecked() then
+            fillFade:Stop()
+            fillFade:Play()
+        end
+        UpdateStyle()
+    end)
+    checkbox:SetScript("OnEnter", function() hovered = true; UpdateStyle() end)
+    checkbox:SetScript("OnLeave", function() hovered = false; UpdateStyle() end)
+    checkbox:HookScript("OnEnable", UpdateStyle)
+    checkbox:HookScript("OnDisable", UpdateStyle)
+    checkbox:HookScript("OnHide", function() hovered = false; UpdateStyle() end)
+    hooksecurefunc(checkbox, "SetChecked", UpdateStyle)
+    hooksecurefunc(text, "SetText", UpdateHitRect)
+    UpdateStyle()
 
     frame.checkbox = checkbox
     frame.label = text
@@ -799,12 +861,8 @@ function UI.CreateModernCheckbox(parent, label, initialValue, onChange)
     function frame:SetEnabled(enabled)
         if enabled then
             checkbox:Enable()
-            text:SetTextColor(1, 1, 1, 1)
-            frame:SetAlpha(1)
         else
             checkbox:Disable()
-            text:SetTextColor(0.5, 0.5, 0.5, 1)
-            frame:SetAlpha(0.5)
         end
     end
 
@@ -1233,77 +1291,6 @@ function UI.CreateModalOverlay()
 
     overlay.window = window
     return overlay
-end
-
-local customTextPopup
-
-function UI.ShowCustomTextPopup(currentText, currentFontSize, onConfirm)
-    if not customTextPopup then
-        local overlay = UI.CreateModalOverlay()
-        local window = overlay.window
-        window:SetSize(376, 240)
-
-        local title = window:CreateFontString(nil, "ARTWORK", "CDM_Font18")
-        title:SetText(L["Custom Text"])
-        title:SetPoint("TOPLEFT", 18, -44)
-        title:SetTextColor(GOLD.r, GOLD.g, GOLD.b, 1)
-
-        local label = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
-        label:SetText(L["Text"])
-        label:SetPoint("TOPLEFT", 18, -78)
-
-        local editBox = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
-        editBox:SetSize(328, 24)
-        editBox:SetPoint("TOPLEFT", 24, -100)
-        editBox:SetFontObject("CDM_Font14")
-        editBox:SetAutoFocus(false)
-        editBox:SetMaxLetters(200)
-
-        local fontSizeSlider = UI.CreateModernSlider(window, L["Font Size"], 6, 48, 14,
-            function(value) overlay.fontSize = value end, 100, 232)
-        fontSizeSlider:SetPoint("TOPLEFT", 18, -140)
-
-        local function Commit()
-            local value = editBox:GetText()
-            local fontSize = tonumber(fontSizeSlider.Input:GetText()) or overlay.fontSize
-            fontSize = math.floor(math.max(6, math.min(48, fontSize)))
-            local confirm = overlay.onConfirm
-            overlay:Hide()
-            if confirm then confirm(value, fontSize) end
-        end
-
-        local saveButton = UI.CreateTextButton(window)
-        saveButton:SetSize(90, 24)
-        saveButton:SetPoint("BOTTOMRIGHT", -116, 18)
-        saveButton:SetText(L["Save"])
-        saveButton:SetScript("OnClick", Commit)
-
-        local cancelButton = UI.CreateTextButton(window)
-        cancelButton:SetSize(90, 24)
-        cancelButton:SetPoint("BOTTOMRIGHT", -18, 18)
-        cancelButton:SetText(L["Cancel"])
-        cancelButton:SetScript("OnClick", function() overlay:Hide() end)
-
-        editBox:SetScript("OnEnterPressed", Commit)
-        editBox:SetScript("OnEscapePressed", function() overlay:Hide() end)
-        overlay:HookScript("OnHide", function()
-            editBox:ClearFocus()
-            fontSizeSlider.Input:ClearFocus()
-            overlay.onConfirm = nil
-        end)
-
-        overlay.editBox = editBox
-        overlay.fontSizeSlider = fontSizeSlider
-        customTextPopup = overlay
-    end
-
-    local popup = customTextPopup
-    popup.onConfirm = onConfirm
-    popup.fontSize = currentFontSize or 14
-    popup.editBox:SetText(currentText or "")
-    popup.fontSizeSlider:UpdateUIValue(popup.fontSize)
-    popup:Show()
-    popup.editBox:SetFocus()
 end
 
 -- Shared "Custom Icon" chooser. One text field plus a Spell, an Item and an

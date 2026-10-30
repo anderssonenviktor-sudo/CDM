@@ -1226,6 +1226,59 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 glowColorPicker:SetPoint("LEFT", glowColorLabel, "RIGHT", 6, 0)
                 yOff = yOff - 30
             end
+
+            local glowTypeOverride = auraOv and auraOv.glowTypeOverride or false
+            local glowTypeCheckbox = UI.CreateModernCheckbox(
+                rc,
+                L["Override Glow Type"],
+                glowTypeOverride,
+                function(checked)
+                    local ov
+                    if groupIndex then
+                        ov = EnsureSpellOverride(groupIndex, spellID)
+                    else
+                        ov = EnsureUngroupedOverrideEntry(spellID)
+                    end
+                    if not ov then return end
+                    ov.glowTypeOverride = checked or nil
+                    if checked and not ov.glowType then
+                        ov.glowType = CDM.db.glowType or CDM.defaults.glowType or "proc"
+                    end
+                    SaveAndRefresh()
+                    ShowSpellSettings(spellID, groupIndex)
+                end
+            )
+            glowTypeCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 36
+
+            if glowTypeOverride then
+                local glowTypeLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+                glowTypeLabel:SetText(L["Glow Type"])
+                glowTypeLabel:SetPoint("TOPLEFT", 20, yOff)
+
+                local glowTypeDropdown = RegisterRightPanelDropdown(UI.CreateDropdown(rc))
+                glowTypeDropdown:SetWidth(170)
+                glowTypeDropdown:SetPoint("LEFT", glowTypeLabel, "RIGHT", 8, 0)
+
+                local selectedType = auraOv.glowType or CDM.db.glowType or CDM.defaults.glowType or "proc"
+                local function CurrentGlowType() return selectedType end
+                glowTypeDropdown:SetDefaultText(UI.GetOptionLabel(UI.GlowTypeOptions, CurrentGlowType()))
+                UI.SetupValueDropdown(glowTypeDropdown, UI.GlowTypeOptions, CurrentGlowType,
+                    function(value, optionLabel)
+                        local ov
+                        if groupIndex then
+                            ov = EnsureSpellOverride(groupIndex, spellID)
+                        else
+                            ov = EnsureUngroupedOverrideEntry(spellID)
+                        end
+                        if not ov then return end
+                        ov.glowType = value
+                        selectedType = value
+                        glowTypeDropdown:SetDefaultText(optionLabel)
+                        SaveAndRefresh()
+                    end)
+                yOff = yOff - 36
+            end
         end
 
         local CD_TEXT_OV_FIELDS = {

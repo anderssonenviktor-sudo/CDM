@@ -628,19 +628,6 @@ local function CreateBuffGroupsPanel(page)
             yOff = context.buildAppearance(yOff)
         end
 
-        local function OpenCustomText()
-            local current = ensureOv()
-            if not current then return end
-            UI.ShowCustomTextPopup(current.customText, current.customTextFontSize, function(value, fontSize)
-                local ov = ensureOv()
-                if not ov then return end
-                ov.customText = value ~= "" and value or nil
-                ov.customTextFontSize = fontSize
-                save()
-                refresh()
-            end)
-        end
-
         local customTextChecked = existingOv and existingOv.customTextEnabled or false
         local customTextCheckbox = UI.CreateModernCheckbox(rc, L["Custom Text"], customTextChecked,
             function(checked)
@@ -649,18 +636,69 @@ local function CreateBuffGroupsPanel(page)
                 ov.customTextEnabled = checked or nil
                 save()
                 refresh()
-                if checked then OpenCustomText() end
             end)
         customTextCheckbox:SetPoint("TOPLEFT", 0, yOff)
+        yOff = yOff - 36
 
         if customTextChecked then
-            local editTextButton = UI.CreateTextButton(rc)
-            editTextButton:SetSize(100, 22)
-            editTextButton:SetPoint("LEFT", customTextCheckbox, "LEFT", 200, 0)
-            editTextButton:SetText(L["Edit Text"])
-            editTextButton:SetScript("OnClick", OpenCustomText)
+            local textLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+            textLabel:SetText(L["Text"])
+            textLabel:SetPoint("TOPLEFT", 20, yOff - 4)
+
+            local textBox = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+            textBox:SetSize(220, 22)
+            textBox:SetPoint("LEFT", textLabel, "RIGHT", 12, 0)
+            textBox:SetFontObject("CDM_Font14")
+            textBox:SetAutoFocus(false)
+            textBox:SetMaxLetters(200)
+            textBox:SetText(existingOv and existingOv.customText or "")
+            textBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+            textBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+            textBox:SetScript("OnEditFocusLost", function(self)
+                local ov = ensureOv()
+                if not ov then return end
+                local val = self:GetText()
+                val = (val ~= "") and val or nil
+                if ov.customText == val then return end
+                ov.customText = val
+                save()
+            end)
+            yOff = yOff - 34
+
+            local currentSize = existingOv and existingOv.customTextFontSize or 14
+
+            local sizeBox = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+            sizeBox:SetSize(28, 22)
+            sizeBox:SetPoint("TOPLEFT", textBox, "BOTTOMLEFT", 0, -12)
+            sizeBox:SetFontObject("CDM_Font14")
+            sizeBox:SetJustifyH("CENTER")
+            sizeBox:SetAutoFocus(false)
+            sizeBox:SetNumeric(true)
+            sizeBox:SetMaxLetters(2)
+            sizeBox:SetText(tostring(currentSize))
+            sizeBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+            sizeBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+            sizeBox:SetScript("OnEditFocusLost", function(self)
+                local size = tonumber(self:GetText())
+                local ov = size and ensureOv()
+                if not ov then
+                    self:SetText(tostring(currentSize))
+                    return
+                end
+                size = math.max(6, math.min(48, size))
+                self:SetText(tostring(size))
+                if size == currentSize then return end
+                currentSize = size
+                ov.customTextFontSize = size
+                save()
+            end)
+
+            local sizeLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
+            sizeLabel:SetText(L["Size"])
+            sizeLabel:SetPoint("LEFT", rc, "LEFT", 20, 0)
+            sizeLabel:SetPoint("TOP", sizeBox, "TOP", 0, -4)
+            yOff = yOff - 34
         end
-        yOff = yOff - 36
 
         local soundChecked = existingOv and existingOv.soundEnabled or false
         local soundCheckbox = UI.CreateModernCheckbox(
@@ -934,9 +972,6 @@ local function CreateBuffGroupsPanel(page)
             placeholderCheckbox:SetPoint("TOPLEFT", 0, yOff)
             if placeholderOpts.forced or not placeholderOpts.isStatic then
                 placeholderCheckbox.checkbox:Disable()
-                if not placeholderOpts.forced then
-                    placeholderCheckbox.label:SetTextColor(0.5, 0.5, 0.5)
-                end
             end
             yOff = yOff - 36
         end

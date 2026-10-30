@@ -351,7 +351,7 @@ local function SetupZoneTransitionEvents()
         C_Timer.After(0.5, function() CDM:Refresh() end)
     end)
 
-    CDM:RegisterEvent("UI_SCALE_CHANGED", function()
+    local function OnPixelScaleChanged()
         CDM.Pixel.Update()
         if CDM.UpdateEssentialContainerPosition then
             CDM:UpdateEssentialContainerPosition()
@@ -363,7 +363,9 @@ local function SetupZoneTransitionEvents()
             CDM:UpdateBuffBarContainerPosition()
         end
         CDM:Refresh()
-    end)
+    end
+    CDM:RegisterEvent("UI_SCALE_CHANGED", OnPixelScaleChanged)
+    CDM:RegisterEvent("DISPLAY_SIZE_CHANGED", OnPixelScaleChanged)
 
     CDM:RegisterEvent("PLAYER_ENTERING_WORLD", function(event, isInitialLogin, isReloadingUi)
         CDM.viewersReady = false

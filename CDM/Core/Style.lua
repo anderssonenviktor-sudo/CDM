@@ -422,7 +422,7 @@ local function ApplyAuraOverlayActive(frame, frameData, entry)
     end
 
     if entry.auraGlowEnabled then
-        CDM.Glow:RequestBuffGlow(frame, true, entry.auraGlowColor, nil)
+        CDM.Glow:RequestBuffGlow(frame, true, entry.auraGlowColor, nil, entry.glowType)
         frameData.cdmAuraGlowActive = true
     elseif frameData.cdmAuraGlowActive then
         CDM.Glow:RequestBuffGlow(frame, false)
@@ -502,13 +502,14 @@ local function ClearReadyGlow(frame, frameData)
 end
 
 local function ApplyReadyGlow(frame, frameData, entry)
-    if frameData.cdmReadyGlowActive and frameData.cdmBuffGlowOverrideColor == entry.readyGlowColor then
+    if frameData.cdmReadyGlowActive and frameData.cdmBuffGlowOverrideColor == entry.readyGlowColor
+        and frameData.cdmBuffGlowOverrideType == entry.glowType then
         local host = frameData.cdmBuffGlowHost
         if host and host:IsShown() and host:GetWidth() >= 1 and GetFrameData(host).cdmGlowActive then
             return
         end
     end
-    CDM.Glow:RequestBuffGlow(frame, true, entry.readyGlowColor, nil)
+    CDM.Glow:RequestBuffGlow(frame, true, entry.readyGlowColor, nil, entry.glowType)
     frameData.cdmReadyGlowActive = true
 end
 

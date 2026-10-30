@@ -230,17 +230,21 @@ local function UpdateIcon(frame, forceStyle)
     if (auraGlow or readyGlow) and override.glowColorOverride then
         glowColor = override.glowColor or glowColor
     end
+    local glowType = override and override.glowTypeOverride and override.glowType or nil
     if auraGlow or readyGlow then
         if CDM.Glow and (not fd.cdmTrinketOverrideGlowActive
-            or fd.cdmTrinketOverrideGlowColor ~= glowColor) then
-            CDM.Glow:RequestBuffGlow(frame, true, glowColor, nil)
+            or fd.cdmTrinketOverrideGlowColor ~= glowColor
+            or fd.cdmTrinketOverrideGlowType ~= glowType) then
+            CDM.Glow:RequestBuffGlow(frame, true, glowColor, nil, glowType)
             fd.cdmTrinketOverrideGlowActive = true
             fd.cdmTrinketOverrideGlowColor = glowColor
+            fd.cdmTrinketOverrideGlowType = glowType
         end
     elseif fd.cdmTrinketOverrideGlowActive then
         if CDM.Glow then CDM.Glow:RequestBuffGlow(frame, false) end
         fd.cdmTrinketOverrideGlowActive = nil
         fd.cdmTrinketOverrideGlowColor = nil
+        fd.cdmTrinketOverrideGlowType = nil
     end
 end
 

@@ -4,6 +4,8 @@ local CDM_C = CDM.CONST
 
 local math_floor = math.floor
 local math_ceil = math.ceil
+local type = type
+local canaccessvalue = canaccessvalue
 
 local Pixel = {}
 CDM.Pixel = Pixel
@@ -73,12 +75,64 @@ function Pixel.SetSize(frame, w, h)
     frame:SetSize(Pixel.Snap(w), Pixel.Snap(h))
 end
 
+-- 0 = left/bottom, 1 = right/top.
+local POINT_FRACTION = {
+    TOPLEFT     = { 0, 1 },   TOP    = { 0.5, 1 },   TOPRIGHT    = { 1, 1 },
+    LEFT        = { 0, 0.5 }, CENTER = { 0.5, 0.5 }, RIGHT       = { 1, 0.5 },
+    BOTTOMLEFT  = { 0, 0 },   BOTTOM = { 0.5, 0 },   BOTTOMRIGHT = { 1, 0 },
+}
+
+local function SafeNum(v)
+    if type(v) == "number" and (not canaccessvalue or canaccessvalue(v)) then
+        return v
+    end
+end
+
+-- Snaps the resulting edge, not the offset. Pixel.SetPoint is useless when the
+-- anchor frame itself sits on a half pixel (e.g. a Blizzard frame centred on an
+-- odd width), since the fractional origin is inherited. Set the frame's size
+-- first. Falls back to Pixel.SetPoint when geometry is secret or not laid out.
+function Pixel.SetGridPoint(frame, point, relativeTo, relativePoint, x, y)
+    if not frame then return end
+    if type(relativeTo) == "string" then relativeTo = _G[relativeTo] end
+    relativeTo = relativeTo or frame:GetParent()
+    relativePoint = relativePoint or point
+    x, y = x or 0, y or 0
+
+    local objF, relF = POINT_FRACTION[point], POINT_FRACTION[relativePoint]
+    local relLeft = objF and relF and relativeTo and SafeNum(relativeTo:GetLeft())
+    local relBottom = relLeft and SafeNum(relativeTo:GetBottom())
+    local relW = relBottom and SafeNum(relativeTo:GetWidth())
+    local relH = relW and SafeNum(relativeTo:GetHeight())
+    local objW = relH and SafeNum(frame:GetWidth())
+    local objH = objW and SafeNum(frame:GetHeight())
+    local objScale = objH and SafeNum(frame:GetEffectiveScale())
+    local relScale = objScale and SafeNum(relativeTo:GetEffectiveScale())
+    if not relScale or objScale <= 0 or cachedPhysH <= 0 then
+        Pixel.SetPoint(frame, point, relativeTo, relativePoint, x, y)
+        return
+    end
+
+    -- Work in the frame's own units so differing effective scales stay correct.
+    local ratio = relScale / objScale
+    local px = 768 / (cachedPhysH * objScale)
+    local left = (relLeft + relF[1] * relW) * ratio - objF[1] * objW + x
+    local bottom = (relBottom + relF[2] * relH) * ratio - objF[2] * objH + y
+    local dx = math_floor(left / px + 0.5) * px - left
+    local dy = math_floor(bottom / px + 0.5) * px - bottom
+    frame:SetPoint(point, relativeTo, relativePoint, x + dx, y + dy)
+end
+
 function Pixel.FontSize(desiredPx)
     return desiredPx * cachedScale
 end
 
 function Pixel.DisableTextureSnap(tex)
     if not tex then return end
+    if not tex.SetSnapToPixelGrid and tex.GetStatusBarTexture then
+        tex = tex:GetStatusBarTexture()
+        if not tex then return end
+    end
     if tex.SetSnapToPixelGrid then
         tex:SetSnapToPixelGrid(false)
     end

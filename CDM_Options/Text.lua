@@ -65,12 +65,25 @@ local function BuildCooldownText(subPage, page)
     UI.StyleDivider(divider)
     divider:SetPoint("TOP", subPage, "TOP", 0, 0)
 
-    local rc = CreateFrame("Frame", nil, subPage)
-    rc:SetPoint("TOPLEFT", 30, -15)
-    rc:SetPoint("BOTTOMRIGHT", -20, 10)
+    local rc, sc = UI.MakeSubPageScroll(subPage, "CDM_CooldownTextScrollFrame")
+    -- The timer section is wider than the helper's default scroll child width.
+    sc:GetParent():HookScript("OnSizeChanged", function(_, w) sc:SetWidth(w) end)
+
+    local SECTION_TOP, SECTION_GAP = 15, 14
+    local sections = {}
+
+    local function UpdateScrollHeight()
+        local height = SECTION_TOP
+        for i, section in ipairs(sections) do
+            if i > 1 then height = height + SECTION_GAP end
+            height = height + section:GetHeight()
+        end
+        UI.FinalizeScroll(sc, rc, -height)
+    end
 
     local function CollapsibleSection(key, label, width, contentHeight)
         local frame = CreateFrame("Frame", nil, rc)
+        sections[#sections + 1] = frame
         frame:SetWidth(width)
 
         local header = CreateFrame("Button", nil, frame)
@@ -100,6 +113,7 @@ local function BuildCooldownText(subPage, page)
             content:SetShown(expanded)
             arrow:SetRotation(expanded and 0 or math.pi / 2)
             frame:SetHeight(expanded and (30 + contentHeight) or 24)
+            UpdateScrollHeight()
         end
         header:SetScript("OnClick", function()
             cooldownTextExpanded[key] = not cooldownTextExpanded[key]
@@ -134,7 +148,7 @@ local function BuildCooldownText(subPage, page)
     end
 
     local timerSection, timer = CollapsibleSection("timer", L["Cooldown Timer"], 550, 193)
-    timerSection:SetPoint("TOPLEFT")
+    timerSection:SetPoint("TOPLEFT", 0, -SECTION_TOP)
     ColorSwatch(timer, L["Color"], "cooldownColor", 0)
     CompactSlider(timer, L["Row 1 Font Size"], "cooldownFontSize", -35, 8, 32)
     CompactSlider(timer, L["Row 2 Font Size"], "essRow2CooldownFontSize", -90, 8, 32)
@@ -170,7 +184,7 @@ local function BuildCooldownText(subPage, page)
     UpdateThresholdControls()
 
     local chargesSection, charges = CollapsibleSection("charges", L["Charges"], 260, 288)
-    chargesSection:SetPoint("TOPLEFT", timerSection, "BOTTOMLEFT", 0, -14)
+    chargesSection:SetPoint("TOPLEFT", timerSection, "BOTTOMLEFT", 0, -SECTION_GAP)
     CompactSlider(charges, L["Row 1 Font Size"], "chargeFontSize", 0, 8, 32)
     CompactSlider(charges, L["Row 2 Font Size"], "essRow2ChargeFontSize", -50, 8, 32)
     ColorSwatch(charges, L["Color"], "chargeColor", -100)
@@ -179,7 +193,7 @@ local function BuildCooldownText(subPage, page)
     CompactSlider(charges, L["Y Offset"], "chargeOffsetY", -240, -50, 50)
 
     local utilitySection, utility = CollapsibleSection("utility", L["Utility"], 260, 288)
-    utilitySection:SetPoint("TOPLEFT", chargesSection, "BOTTOMLEFT", 0, -14)
+    utilitySection:SetPoint("TOPLEFT", chargesSection, "BOTTOMLEFT", 0, -SECTION_GAP)
     CompactSlider(utility, L["Cooldown Font Size"], "utilityCooldownFontSize", 0, 8, 32)
     CompactSlider(utility, L["Charges Font Size"], "utilityChargeFontSize", -50, 8, 32)
     ColorSwatch(utility, L["Color"], "utilityChargeColor", -100)

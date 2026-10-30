@@ -34,7 +34,7 @@ function CDM.GroupContainerUtils.AnchorToTarget(container, targetContainer, anch
         return false
     end
     container:ClearAllPoints()
-    Pixel.SetPoint(container, anchorPoint, targetContainer, relativePoint, offsetX, offsetY)
+    Pixel.SetGridPoint(container, anchorPoint, targetContainer, relativePoint, offsetX, offsetY)
     if not container:IsShown() then
         container:Show()
     end

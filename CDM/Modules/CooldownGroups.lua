@@ -469,6 +469,7 @@ local function BuildMapEntry(entry, isDotDefault, auraOverlay)
         if entry.auraBorderColor then mapEntry.auraBorderColor = entry.auraBorderColor end
         if entry.readyGlowEnabled then mapEntry.readyGlowEnabled = true end
         if entry.readyGlowColor then mapEntry.readyGlowColor = entry.readyGlowColor end
+        if entry.glowTypeOverride then mapEntry.glowType = entry.glowType end
     end
     return mapEntry
 end
@@ -643,7 +644,7 @@ function CDM:GetUngroupedCooldownOverride(spellID, specID)
     return specOv[spellID]
 end
 
-function CDM:GetCooldownGlowColorOverride(frame)
+local function ResolveCooldownFrameOverride(self, frame)
     if not frame then return nil end
 
     local frameData = GetFrameData(frame)
@@ -664,8 +665,21 @@ function CDM:GetCooldownGlowColorOverride(frame)
         end
     end
 
+    return entry
+end
+
+function CDM:GetCooldownGlowColorOverride(frame)
+    local entry = ResolveCooldownFrameOverride(self, frame)
     if entry and entry.glowColorOverride then
         return entry.glowColor
+    end
+    return nil
+end
+
+function CDM:GetCooldownGlowTypeOverride(frame)
+    local entry = ResolveCooldownFrameOverride(self, frame)
+    if entry and entry.glowTypeOverride then
+        return entry.glowType
     end
     return nil
 end
