@@ -266,18 +266,40 @@ local function StyleSliderWithSteppers(control)
         slider.Thumb:SetVertexColor(c, c, c, 1)
     end
 
-    for _, info in ipairs({ { control.Back, "-" }, { control.Forward, "+" } }) do
-        local button, text = info[1], info[2]
+    -- Glyphs drawn as textures: font "-"/"+" sit off the track's vertical centre.
+    local STEPPER_LEN, STEPPER_THICK = 8, 2
+    for _, info in ipairs({ { control.Back, false }, { control.Forward, true } }) do
+        local button, isPlus = info[1], info[2]
         for _, region in ipairs({ button:GetRegions() }) do region:Hide() end
         button:SetSize(16, 20)
-        local label = button:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-        label:SetPoint("CENTER")
-        label:SetText(text)
-        label:SetTextColor(0.65, 0.65, 0.65, 1)
+        -- Reuse the template's anchor (re-anchoring to the slider could loop) and
+        -- drop its y offset so the glyph centres on the track.
+        local point, relativeTo, relativePoint, x = button:GetPoint(1)
+        if point then
+            button:ClearAllPoints()
+            button:SetPoint(point, relativeTo, relativePoint, x, 0)
+        end
+
+        local bars = {}
+        local horizontal = button:CreateTexture(nil, "OVERLAY")
+        horizontal:SetSize(STEPPER_LEN, STEPPER_THICK)
+        horizontal:SetPoint("CENTER")
+        bars[1] = horizontal
+        if isPlus then
+            local vertical = button:CreateTexture(nil, "OVERLAY")
+            vertical:SetSize(STEPPER_THICK, STEPPER_LEN)
+            vertical:SetPoint("CENTER")
+            bars[2] = vertical
+        end
+
+        local function SetGlyphColor(r, g, b)
+            for _, bar in ipairs(bars) do bar:SetColorTexture(r, g, b, 1) end
+        end
+        SetGlyphColor(0.65, 0.65, 0.65)
         button:HookScript("OnEnter", function()
-            if button:IsEnabled() then label:SetTextColor(GOLD.r, GOLD.g, GOLD.b, 1) end
+            if button:IsEnabled() then SetGlyphColor(GOLD.r, GOLD.g, GOLD.b) end
         end)
-        button:HookScript("OnLeave", function() label:SetTextColor(0.65, 0.65, 0.65, 1) end)
+        button:HookScript("OnLeave", function() SetGlyphColor(0.65, 0.65, 0.65) end)
     end
 
     slider:HookScript("OnValueChanged", UpdateFill)
@@ -569,6 +591,21 @@ function UI.CreateSimpleColorPicker(parent, initialColor, onChange, hasOpacity)
     return button
 end
 
+-- The input overlaps the slider's hit rect, so it must sit above the slider's
+-- frame level or clicks on the box land on the slider instead.
+local function CreateSliderInput(panel)
+    local eb = CreateFrame("EditBox", nil, panel)
+    eb:SetSize(50, 18)
+    eb:SetPoint("BOTTOM", panel.Slider, "TOP", 0, -8)
+    eb:SetFrameLevel(panel.Slider.Slider:GetFrameLevel() + 2)
+    eb:SetFontObject("CDM_Font14")
+    eb:SetJustifyH("CENTER")
+    eb:SetTextInsets(0, 0, 0, 0)
+    eb:SetAutoFocus(false)
+    StyleEditBox(eb)
+    return eb
+end
+
 function UI.CreateModernSlider(parent, label, minVal, maxVal, currentVal, onValueChanged, labelWidth, sliderWidth)
     currentVal = tonumber(currentVal) or minVal
     local lw = labelWidth or 200
@@ -598,15 +635,7 @@ function UI.CreateModernSlider(parent, label, minVal, maxVal, currentVal, onValu
     })
     StyleSliderWithSteppers(panel.Slider)
 
-    local eb = CreateFrame("EditBox", nil, panel)
-    eb:SetSize(50, 18)
-    eb:SetPoint("BOTTOM", panel.Slider, "TOP", 0, -8)
-    eb:SetFontObject("CDM_Font14")
-    eb:SetJustifyH("CENTER")
-    eb:SetTextInsets(0, 0, 0, 0)
-    eb:SetAutoFocus(false)
-    StyleEditBox(eb)
-    panel.Input = eb
+    panel.Input = CreateSliderInput(panel)
     local suppressOnValueChanged = false
 
     local function SetSliderValue(value, suppressCallback)
@@ -725,15 +754,7 @@ function UI.CreateModernSliderPrecise(parent, label, minVal, maxVal, currentVal,
     })
     StyleSliderWithSteppers(panel.Slider)
 
-    local eb = CreateFrame("EditBox", nil, panel)
-    eb:SetSize(50, 18)
-    eb:SetPoint("BOTTOM", panel.Slider, "TOP", 0, -8)
-    eb:SetFontObject("CDM_Font14")
-    eb:SetJustifyH("CENTER")
-    eb:SetTextInsets(0, 0, 0, 0)
-    eb:SetAutoFocus(false)
-    StyleEditBox(eb)
-    panel.Input = eb
+    panel.Input = CreateSliderInput(panel)
     local suppressOnValueChanged = false
 
     local function SetSliderValue(value, suppressCallback)
