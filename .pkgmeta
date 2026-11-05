@@ -1,0 +1,18 @@
+package-as: CDM
+
+move-folders:
+  CDM/CDM: CDM
+  CDM/CDM_Options: CDM_Options
+
+
+manual-changelog: CDM/CDM/CHANGELOG.md
+
+
+ignore:
+ - .vscode/
+ - AGENTS.md
+ - .docs/
+ - .fixtures/
+ - .tools/
+
+
