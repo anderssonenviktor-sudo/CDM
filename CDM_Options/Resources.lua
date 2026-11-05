@@ -1003,6 +1003,19 @@ local function CreateResourcesTab(page, tabId)
         end
     end
 
+    local faint = UI.TextColors.faint
+    local notLoadedColor = CreateColor(faint.r, faint.g, faint.b, 1)
+
+    -- The runtime's active list covers spec, learned spells and load conditions.
+    -- It is not cleared when resources are disabled, so check that first.
+    local function IsBarLoaded(barKey)
+        if CDM.db.resourcesEnabled == false then return false end
+        for _, activeKey in ipairs(CDM.activeBarKeys or {}) do
+            if activeKey == barKey then return true end
+        end
+        return false
+    end
+
     resourceDropdown:SetupMenu(function(_, rootDescription)
         local classBars = CDM.CLASS_BARS
         if not classBars then return end
@@ -1011,7 +1024,12 @@ local function CreateResourcesTab(page, tabId)
             if bars and #bars > 0 then
                 rootDescription:CreateTitle(classKey == "General" and L["Shared"] or CLASS_DISPLAY_NAMES[classKey])
                 for _, barKey in ipairs(bars) do
-                    rootDescription:CreateRadio(BAR_DISPLAY_NAMES[barKey] or barKey,
+                    local label = BAR_DISPLAY_NAMES[barKey] or barKey
+                    if not IsBarLoaded(barKey) then
+                        -- Inline color survives the menu skin's font and selection recolor.
+                        label = notLoadedColor:WrapTextInColorCode(label .. " " .. L["(Not loaded)"])
+                    end
+                    rootDescription:CreateRadio(label,
                         function() return selectedClassKey == classKey and selectedBarKey == barKey end,
                         function()
                             -- Rebuilding panels closes menus; let the selection finish first.
