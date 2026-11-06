@@ -793,6 +793,7 @@ function CDM:GetOrCreateAnchorContainer(viewer)
         end
 
         self.anchorContainers[vName] = container
+        self:UpdateEditModeSelectionOverlay(vName)
 
         local savedPos = GetPositionSettings(vName, "Default")
         container:ClearAllPoints()
@@ -830,6 +831,7 @@ function CDM:GetOrCreateAnchorContainer(viewer)
         end)
 
         self.anchorContainers[vName] = container
+        self:UpdateEditModeSelectionOverlay(vName)
 
         self:UpdateBuffBarContainerPosition()
 
@@ -840,6 +842,7 @@ function CDM:GetOrCreateAnchorContainer(viewer)
         local container = CreateBaseContainer(vName .. "_AnchorContainer")
 
         self.anchorContainers[vName] = container
+        self:UpdateEditModeSelectionOverlay(vName)
 
         if vName == VIEWERS.UTILITY then
             container:SetSize(Snap(sizeUtility.w), Snap(sizeUtility.h))

@@ -18,16 +18,6 @@ local footerRefreshRegistered = false
 local lastFooterFont = nil
 local combatCloseRegistered = false
 local hidingForAnchorMode = false
-
-function ns.ToggleCooldownViewerSettings()
-    if not CooldownViewerSettings then return end
-    if CooldownViewerSettings:IsVisible() then
-        securecall("HideUIPanel", CooldownViewerSettings)
-    else
-        securecall("ShowUIPanel", CooldownViewerSettings)
-    end
-end
-
 local SCROLL_FRAME_NAMES = {
     resources = "CDM_ResourcesScrollFrame",
     bars = "CDM_BarsScrollFrame",
@@ -257,7 +247,14 @@ local function CreateConfigFrame()
 
     local cdmBtn = CreateHeaderIconButton("wrench1", 34, 1)
     cdmBtn:SetPoint("LEFT", titleContainer, "LEFT", 8, 0)
-    cdmBtn:SetScript("OnClick", ns.ToggleCooldownViewerSettings)
+    cdmBtn:SetScript("OnClick", function()
+        if not CooldownViewerSettings then return end
+        if CooldownViewerSettings:IsVisible() then
+            securecall("HideUIPanel", CooldownViewerSettings)
+        else
+            securecall("ShowUIPanel", CooldownViewerSettings)
+        end
+    end)
 
     local editModeBtn = CreateHeaderIconButton("eye1", 38, 1)
     editModeBtn:SetPoint("LEFT", cdmBtn, "RIGHT", 0, 0)

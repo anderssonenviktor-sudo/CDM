@@ -33,6 +33,7 @@ end
 
 function CDM:SetAnchorModeActive(active)
     self.anchorModeActive = active and true or false
+    self:UpdateEditModeSelectionOverlays()
     self:Refresh("BUFF_DATA")
     self:UpdateContainerDragOverlays()
 end
@@ -1312,6 +1313,7 @@ CDM:RegisterCombatStateHandler(function(isInCombat)
             securecall("HideUIPanel", AnchorMode.openedSettings)
             AnchorMode.openedSettings = nil
         end
+        CDM:UpdateEditModeSelectionOverlays()
         if pendingCombatRefresh then
             pendingCombatRefresh = false
             CDM:Refresh("LAYOUT")

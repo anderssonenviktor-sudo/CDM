@@ -1349,6 +1349,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
         rc:SetHeight(math.abs(yOff) + 20)
     end
 
+    local addIconBtnRef = nil
     local ShowSpellPickerPanel
 
     local headerPool, groupContainerPool, emptyRowPool, spellRowPool =
@@ -2570,17 +2571,21 @@ local function CreateCooldownGroupsPanel(subPage, page)
             ShowGroupSettings(newIndex)
         end)
 
-        local blizzardCDMBtn = UI.CreateTextButton(buttonRow)
-        blizzardCDMBtn:SetSize(90, 22)
-        blizzardCDMBtn:SetPoint("LEFT", addGroupBtn, "RIGHT", 6, 0)
-        blizzardCDMBtn:SetText(L["Blizzard CDM"])
-        blizzardCDMBtn:SetScript("OnClick", function() ns.ToggleCooldownViewerSettings() end)
+        local addIconBtn = UI.CreateTextButton(buttonRow)
+        addIconBtn:SetSize(90, 22)
+        addIconBtn:SetPoint("LEFT", addGroupBtn, "RIGHT", 6, 0)
+        addIconBtn:SetText(L["Add Icon"])
+        addIconBtn:SetScript("OnClick", function()
+            if selectedGroupIndex then ShowSpellPickerPanel(selectedGroupIndex) end
+        end)
+        addIconBtnRef = addIconBtn
     end
 
     RefreshAll = function()
         lookupCacheBySpec = {}
         BuildIconGrid()
         BuildGroupsPanel()
+        if addIconBtnRef then addIconBtnRef:SetEnabled(selectedGroupIndex ~= nil) end
     end
 
     local lastGridWidth = 0

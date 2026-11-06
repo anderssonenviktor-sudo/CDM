@@ -205,6 +205,16 @@ function CDM:SetupViewer(vName)
         end)
     end
 
+    if self.UpdateEditModeSelectionOverlay then
+        self:UpdateEditModeSelectionOverlay(vName)
+    end
+
+    v:HookScript("OnShow", function()
+        if self.UpdateEditModeSelectionOverlay then
+            self:UpdateEditModeSelectionOverlay(vName)
+        end
+    end)
+
     hooksecurefunc(v, "RefreshLayout", function()
         self:ForceReanchor(v)
     end)
@@ -271,6 +281,12 @@ end
 
 local function ActivateEditMode()
     CDM.isEditModeActive = true
+    if CDM.LockCooldownViewerEditModeFrames then
+        CDM:LockCooldownViewerEditModeFrames()
+    end
+    if CDM.UpdateEditModeSelectionOverlays then
+        CDM:UpdateEditModeSelectionOverlays()
+    end
     if CDM.UpdateContainerDragOverlays then
         CDM:UpdateContainerDragOverlays()
     end
@@ -293,6 +309,11 @@ local function SetupEditModeIntegration()
             ActivateEditMode()
         end
     end
+
+    if CDM.SetupEditModeCooldownViewerLock then
+        CDM:SetupEditModeCooldownViewerLock()
+    end
+
 end
 
 local function SetupZoneTransitionEvents()
