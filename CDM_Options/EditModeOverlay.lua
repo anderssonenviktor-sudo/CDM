@@ -6,316 +6,311 @@ local UI = ns.ConfigUI
 local L = Runtime.L
 local CDM_C = CDM.CONST
 
--- Enum may be unavailable (e.g. Blizzard_EditMode not loaded yet); bail so the
+-- Enum may be unavailable on clients without the Cooldown Viewer; bail so the
 -- rest of the Options embeds still load. ConfigFrame nil-checks ns.CreateEditModeOverlay.
-local SystemIndices = Enum.EditModeCooldownViewerSystemIndices
-if not SystemIndices then return end
+local SI = Enum.EditModeCooldownViewerSystemIndices
+if not SI then return end
 
+local VIEWER_ORDER = { SI.Essential, SI.Utility, SI.BuffIcon, SI.BuffBar }
 local VIEWER_LABELS = {
-    [SystemIndices.Essential] = "Essential",
-    [SystemIndices.Utility]   = "Utility",
-    [SystemIndices.BuffIcon]  = "Buff Icons",
-    [SystemIndices.BuffBar]   = "Buff Bars",
+    [SI.Essential] = "Essential",
+    [SI.Utility]   = "Utility",
+    [SI.BuffIcon]  = "Buff Icons",
+    [SI.BuffBar]   = "Buff Bars",
 }
 
-local VIEWER_ORDER = {
-    SystemIndices.Essential,
-    SystemIndices.Utility,
-    SystemIndices.BuffIcon,
-    SystemIndices.BuffBar,
-}
+local COLOR_OK    = { 0.20, 0.75, 0.30 }
+local COLOR_ERROR = { 0.992, 0.071, 0 }
+local COLOR_MUTED = { 0.55, 0.55, 0.55 }
 
-local COLOR_COMPLIANT  = { 0.20, 0.75, 0.30, 1.0 }
-local COLOR_MISMATCH   = { 0.90, 0.20, 0.20, 1.0 }
-local COLOR_NA         = { 0.35, 0.35, 0.35, 1.0 }
+---------------------------------------------------------------------------
+-- Blizzard Edit Mode settings CDM expects on the four cooldown viewers
+---------------------------------------------------------------------------
 
-local ICON_SIZE = 14
-local ICON_GAP  = 6
-local ICON_COLUMN_PITCH = ICON_SIZE + ICON_GAP
-local ICON_CLUSTER_WIDTH = ICON_SIZE * #VIEWER_ORDER + ICON_GAP * (#VIEWER_ORDER - 1)
-
-local CHECKBOX_SIZE     = 24
-local LABEL_CHECKBOX_GAP = 4
-local LABEL_ICONS_GAP   = 8
-local ICONS_RIGHT_INSET = 2
-
-local ROW_HEIGHT  = 30
-local ROW_SPACING = 6
-
-local TITLE_TEXT_HEIGHT   = 14
-local HEADER_HEIGHT       = 14
-local HEADER_TO_ROWS_GAP  = 4
-
-local BUTTON_HEIGHT        = 24
-local APPLY_WIDTH          = 100
-local APPLY_DISCLAIMER_WIDTH = 200
-local CANCEL_WIDTH         = 100
-local BUTTONS_GAP          = 8
-local BUTTON_BOTTOM_MARGIN = 8
-local BANNER_TO_BUTTONS_GAP = 6
-
-local function GetIndicatorState(policyState, systemIndex)
-    if not policyState.systemIndexSet[systemIndex] then
-        return "na"
-    end
-    if policyState.currentByViewer[systemIndex] == policyState.recommendedValue then
-        return "compliant"
-    end
-    return "mismatch"
+local function HasEditModeApis()
+    return C_EditMode and C_EditMode.GetLayouts and C_EditMode.SaveLayouts
+        and Enum.EditModeSystem and Enum.EditModeSystem.CooldownViewer
+        and Enum.EditModeCooldownViewerSetting
+        and Enum.CooldownViewerVisibleSetting
+        and Enum.CooldownViewerBarContent
+        and Enum.EditModeLayoutType
 end
 
-local function CreateMiniIcon(parent, viewerName)
-    local icon = CreateFrame("Frame", nil, parent)
-    icon:SetSize(ICON_SIZE, ICON_SIZE)
-    icon:EnableMouse(true)
-
-    local tex = icon:CreateTexture(nil, "ARTWORK")
-    tex:SetAllPoints()
-    icon.tex = tex
-    icon.viewerName = viewerName
-    icon.state = "na"
-
-    icon:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        local statusKey
-        if self.state == "compliant" then
-            statusKey = L["Compliant"]
-        elseif self.state == "mismatch" then
-            statusKey = L["Mismatched"]
-        else
-            statusKey = L["N/A"]
+local POLICIES
+local function GetPolicies()
+    if POLICIES then return POLICIES end
+    local S = Enum.EditModeCooldownViewerSetting
+    local ALL = { SI.Essential, SI.Utility, SI.BuffIcon, SI.BuffBar }
+    local BUFFS = { SI.BuffIcon, SI.BuffBar }
+    POLICIES = {
+        { labelKey = "Always Visible", viewers = ALL, setting = S.VisibleSetting, value = Enum.CooldownViewerVisibleSetting.Always },
+        { labelKey = "Show Timer", viewers = ALL, setting = S.ShowTimer, value = 1 },
+        { labelKey = "Hide Buffs When Inactive", viewers = BUFFS, setting = S.HideWhenInactive, value = 1 },
+        { labelKey = "Full Opacity", viewers = ALL, setting = S.Opacity, value = 100 },
+        { labelKey = "Bar Content: Icon & Name", viewers = { SI.BuffBar }, setting = S.BarContent, value = Enum.CooldownViewerBarContent.IconAndName },
+        { labelKey = "Hide Tooltips", viewers = ALL, setting = S.ShowTooltips, value = 0 },
+    }
+    for _, policy in ipairs(POLICIES) do
+        policy.viewerSet = {}
+        for _, idx in ipairs(policy.viewers) do
+            policy.viewerSet[idx] = true
         end
-        GameTooltip:SetText(L[self.viewerName] .. ": " .. statusKey)
-        GameTooltip:Show()
+    end
+    return POLICIES
+end
+
+-- C_EditMode.GetLayouts() omits presets, but activeLayout indexes the preset
+-- list followed by the saved layouts, so presets have to be prepended.
+local function GetLayoutInfo()
+    local layoutInfo = C_EditMode.GetLayouts()
+    if type(layoutInfo) ~= "table" or type(layoutInfo.layouts) ~= "table" then
+        return nil
+    end
+    if type(layoutInfo.activeLayout) == "number"
+        and EditModePresetLayoutManager and EditModePresetLayoutManager.GetCopyOfPresetLayouts then
+        local presets = EditModePresetLayoutManager:GetCopyOfPresetLayouts()
+        if type(presets) == "table" then
+            tAppendAll(presets, layoutInfo.layouts)
+            layoutInfo.layouts = presets
+        end
+    end
+    return layoutInfo
+end
+
+local function GetActiveLayout(layoutInfo)
+    if not layoutInfo or type(layoutInfo.activeLayout) ~= "number" then return nil end
+    local layout = layoutInfo.layouts[layoutInfo.activeLayout]
+    if type(layout) ~= "table" or type(layout.systems) ~= "table" then return nil end
+    return layout
+end
+
+local function ForEachViewerSystem(layout, fn)
+    local cooldownSystem = Enum.EditModeSystem.CooldownViewer
+    for _, systemInfo in ipairs(layout.systems) do
+        if systemInfo.system == cooldownSystem and type(systemInfo.settings) == "table" then
+            fn(systemInfo)
+        end
+    end
+end
+
+local function FindSetting(settings, settingEnum)
+    for _, info in ipairs(settings) do
+        if info.setting == settingEnum then
+            return info
+        end
+    end
+end
+
+-- Returns nil when Edit Mode data is unavailable, otherwise
+-- { isPreset = bool, wrong = { { label, viewers = { idx, ... } }, ... } }.
+local function ScanLayout()
+    if not HasEditModeApis() then return nil end
+    local layout = GetActiveLayout(GetLayoutInfo())
+    if not layout then return nil end
+
+    local wrongByPolicy = {}
+    local seenAny = false
+    ForEachViewerSystem(layout, function(systemInfo)
+        seenAny = true
+        for i, policy in ipairs(GetPolicies()) do
+            if policy.viewerSet[systemInfo.systemIndex] then
+                local info = FindSetting(systemInfo.settings, policy.setting)
+                if not info or info.value ~= policy.value then
+                    local set = wrongByPolicy[i] or {}
+                    set[systemInfo.systemIndex] = true
+                    wrongByPolicy[i] = set
+                end
+            end
+        end
     end)
-    icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    if not seenAny then return nil end
 
-    return icon
-end
-
-local function SetMiniIconState(icon, state)
-    icon.state = state
-    local color
-    if state == "compliant" then
-        color = COLOR_COMPLIANT
-    elseif state == "mismatch" then
-        color = COLOR_MISMATCH
-    else
-        color = COLOR_NA
-    end
-    icon.tex:SetColorTexture(color[1], color[2], color[3], color[4])
-end
-
-local function CreatePolicyRow(parent, contentWidth)
-    local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(contentWidth, ROW_HEIGHT)
-
-    local checkbox = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
-    checkbox:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
-    checkbox:SetPoint("LEFT", row, "LEFT", 0, 0)
-    row.checkbox = checkbox
-
-    local label = row:CreateFontString(nil, "ARTWORK", "CDM_Font14")
-    label:SetPoint("LEFT", checkbox, "RIGHT", LABEL_CHECKBOX_GAP, 0)
-    label:SetJustifyH("LEFT")
-    row.label = label
-
-    local iconCluster = CreateFrame("Frame", nil, row)
-    iconCluster:SetSize(ICON_CLUSTER_WIDTH, ICON_SIZE)
-    iconCluster:SetPoint("RIGHT", row, "RIGHT", -ICONS_RIGHT_INSET, 0)
-    row.iconCluster = iconCluster
-
-    row.icons = {}
-    local prev
-    for i, systemIndex in ipairs(VIEWER_ORDER) do
-        local icon = CreateMiniIcon(iconCluster, VIEWER_LABELS[systemIndex])
-        if prev then
-            icon:SetPoint("LEFT", prev, "RIGHT", ICON_GAP, 0)
-        else
-            icon:SetPoint("LEFT", iconCluster, "LEFT", 0, 0)
+    local wrong = {}
+    for i, policy in ipairs(GetPolicies()) do
+        local set = wrongByPolicy[i]
+        if set then
+            local viewers = {}
+            for _, idx in ipairs(VIEWER_ORDER) do
+                if set[idx] then viewers[#viewers + 1] = idx end
+            end
+            wrong[#wrong + 1] = { label = policy.labelKey, viewers = viewers }
         end
-        row.icons[systemIndex] = icon
-        prev = icon
     end
 
-    label:SetPoint("RIGHT", iconCluster, "LEFT", -LABEL_ICONS_GAP, 0)
-
-    return row
+    return {
+        isPreset = layout.layoutType == Enum.EditModeLayoutType.Preset,
+        wrong = wrong,
+    }
 end
+
+local function FixLayout()
+    if InCombatLockdown() then return "in_combat" end
+    if not HasEditModeApis() then return "not_ready" end
+    local layoutInfo = GetLayoutInfo()
+    local layout = GetActiveLayout(layoutInfo)
+    if not layout then return "not_ready" end
+    if layout.layoutType == Enum.EditModeLayoutType.Preset then return "preset" end
+
+    local changed = false
+    ForEachViewerSystem(layout, function(systemInfo)
+        for _, policy in ipairs(GetPolicies()) do
+            if policy.viewerSet[systemInfo.systemIndex] then
+                local info = FindSetting(systemInfo.settings, policy.setting)
+                if not info then
+                    systemInfo.settings[#systemInfo.settings + 1] = { setting = policy.setting, value = policy.value }
+                    changed = true
+                elseif info.value ~= policy.value then
+                    info.value = policy.value
+                    changed = true
+                end
+            end
+        end
+    end)
+    if not changed then return "noop" end
+
+    -- Only save. Showing/hiding EditModeManagerFrame to apply live runs Blizzard's
+    -- layout update under CDM taint and poisons the viewers' secure aura maps,
+    -- so the new layout is picked up by a reload instead.
+    C_EditMode.SaveLayouts(layoutInfo)
+    return "saved"
+end
+
+---------------------------------------------------------------------------
+-- Panel
+---------------------------------------------------------------------------
+
+local WINDOW_WIDTH = 420
+local PADDING_X = 18
+local CONTENT_TOP = 58
+local ROW_HEIGHT = 24
+local NOTE_HEIGHT = 32
+local BUTTON_WIDTH = 120
+local BUTTON_HEIGHT = 24
+local BOTTOM_PADDING = 18
 
 local function CreateEditModeOverlay()
     local overlay = UI.CreateModalOverlay()
     local window = overlay.window
+    local contentWidth = WINDOW_WIDTH - PADDING_X * 2
 
-    local paddingX = 18
-    local paddingY = 14
-    local titleOffset = 28
-    local windowWidth = 460
-    local windowHeight = 360
-
-    window:SetSize(windowWidth, windowHeight)
-
-    local contentWidth = windowWidth - paddingX * 2
-
-    local titleText = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
-    titleText:SetText(L["Edit Mode Settings"])
-    titleText:SetPoint("TOPLEFT", window, "TOPLEFT", paddingX, -(paddingY + 16))
-    titleText:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
-
-    local rowContainer = CreateFrame("Frame", nil, window)
-    rowContainer:SetPoint(
-        "TOPLEFT", window, "TOPLEFT",
-        paddingX,
-        -(paddingY + titleOffset + TITLE_TEXT_HEIGHT + HEADER_HEIGHT + HEADER_TO_ROWS_GAP)
-    )
-    rowContainer:SetSize(contentWidth, 220)
-
-    local headerCluster = CreateFrame("Frame", nil, rowContainer)
-    headerCluster:SetSize(ICON_CLUSTER_WIDTH, HEADER_HEIGHT)
-    headerCluster:SetPoint("BOTTOMRIGHT", rowContainer, "TOPRIGHT", -ICONS_RIGHT_INSET, HEADER_TO_ROWS_GAP)
-
-    local headerLetters = { "E", "U", "B", "Bb" }
-    for i, letter in ipairs(headerLetters) do
-        local fs = headerCluster:CreateFontString(nil, "ARTWORK", "CDM_Font14")
-        fs:SetText(letter)
-        fs:SetJustifyH("CENTER")
-        fs:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
-        local centerX = (ICON_SIZE / 2) + (i - 1) * ICON_COLUMN_PITCH
-        fs:SetPoint("CENTER", headerCluster, "LEFT", centerX, 0)
-    end
+    local title = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+    title:SetText(L["Edit Mode Settings"])
+    title:SetPoint("TOPLEFT", window, "TOPLEFT", PADDING_X, -30)
+    title:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
 
     local rows = {}
+    local function GetRow(i)
+        local row = rows[i]
+        if row then return row end
+        row = CreateFrame("Frame", nil, window)
+        row:SetSize(contentWidth, ROW_HEIGHT)
+        row:SetPoint("TOPLEFT", window, "TOPLEFT", PADDING_X, -(CONTENT_TOP + (i - 1) * ROW_HEIGHT))
+        row.label = row:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+        row.label:SetPoint("LEFT")
+        row.label:SetTextColor(COLOR_ERROR[1], COLOR_ERROR[2], COLOR_ERROR[3], 1)
+        row.viewers = row:CreateFontString(nil, "ARTWORK", "CDM_Font12")
+        row.viewers:SetPoint("RIGHT")
+        row.viewers:SetPoint("LEFT", row.label, "RIGHT", 8, 0)
+        row.viewers:SetJustifyH("RIGHT")
+        row.viewers:SetWordWrap(false)
+        row.viewers:SetTextColor(COLOR_MUTED[1], COLOR_MUTED[2], COLOR_MUTED[3], 1)
+        rows[i] = row
+        return row
+    end
 
-    local function BuildRows(policies, onCheckboxClick)
+    -- Shown instead of rows when nothing is wrong, and below rows for warnings.
+    local note = window:CreateFontString(nil, "ARTWORK", "CDM_Font12")
+    note:SetWidth(contentWidth)
+    note:SetJustifyH("LEFT")
+    note:SetWordWrap(true)
+
+    local fixBtn = UI.CreateTextButton(window)
+    fixBtn:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
+    fixBtn:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -PADDING_X, BOTTOM_PADDING)
+    fixBtn:SetText(L["Fix Settings"])
+
+    local function SetNote(text, color, y)
+        note:ClearAllPoints()
+        note:SetPoint("TOPLEFT", window, "TOPLEFT", PADDING_X, -y)
+        note:SetText(text)
+        note:SetTextColor(color[1], color[2], color[3], 1)
+        note:SetShown(text ~= nil)
+    end
+
+    local pendingReload = false
+
+    local function Refresh(warning)
         for _, row in ipairs(rows) do row:Hide() end
 
-        local y = 0
-        for i, policyState in ipairs(policies) do
-            local row = rows[i]
-            if not row then
-                row = CreatePolicyRow(rowContainer, contentWidth)
-                row.checkbox:SetScript("OnClick", onCheckboxClick)
-                rows[i] = row
-            end
-            row:ClearAllPoints()
-            row:SetPoint("TOPLEFT", rowContainer, "TOPLEFT", 0, -y)
-            row:Show()
-            row.label:SetText(L[policyState.labelKey])
-            row.policyId = policyState.id
-            row.checkbox:SetChecked(not policyState.isCompliant)
-            for _, systemIndex in ipairs(VIEWER_ORDER) do
-                local icon = row.icons[systemIndex]
-                SetMiniIconState(icon, GetIndicatorState(policyState, systemIndex))
-            end
-            y = y + ROW_HEIGHT + ROW_SPACING
-        end
-    end
+        local scan = ScanLayout()
+        local wrong = scan and scan.wrong or {}
+        local y = CONTENT_TOP
+        fixBtn:SetText(L["Fix Settings"])
 
-    local bannerY = paddingY + BUTTON_BOTTOM_MARGIN + BUTTON_HEIGHT + BANNER_TO_BUTTONS_GAP
-
-    local presetBanner = window:CreateFontString(nil, "ARTWORK", "CDM_Font14")
-    presetBanner:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", paddingX, bannerY)
-    presetBanner:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -paddingX, bannerY)
-    presetBanner:SetJustifyH("LEFT")
-    presetBanner:SetWordWrap(true)
-    presetBanner:SetTextColor(0.992, 0.071, 0, 1)
-    presetBanner:SetText(L["Active layout is a preset. Switch to or create a custom layout to save changes."])
-    presetBanner:Hide()
-
-    local disclaimerPending = false
-
-    local applyBtn = UI.CreateTextButton(window)
-    applyBtn:SetSize(APPLY_WIDTH, BUTTON_HEIGHT)
-    applyBtn:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -paddingX, paddingY + BUTTON_BOTTOM_MARGIN)
-    applyBtn:SetText(L["Apply"])
-
-    local cancelBtn = UI.CreateTextButton(window)
-    cancelBtn:SetSize(CANCEL_WIDTH, BUTTON_HEIGHT)
-    cancelBtn:SetPoint("RIGHT", applyBtn, "LEFT", -BUTTONS_GAP, 0)
-    cancelBtn:SetText(L["Cancel"])
-
-    local function ResetApplyButton()
-        if disclaimerPending then
-            disclaimerPending = false
-        end
-        applyBtn:SetText(L["Apply"])
-        applyBtn:SetWidth(APPLY_WIDTH)
-    end
-
-    local function CountChecked()
-        local count = 0
-        for _, row in ipairs(rows) do
-            if row:IsShown() and row.checkbox:GetChecked() then
-                count = count + 1
-            end
-        end
-        return count
-    end
-
-    local currentIsPreset = false
-
-    local function UpdateApplyEnabled()
-        if currentIsPreset or CountChecked() == 0 then
-            applyBtn:Disable()
+        if pendingReload then
+            SetNote(L["Settings saved. Reload your UI to apply them."], COLOR_OK, y)
+            fixBtn:SetText(L["Reload UI"])
+            fixBtn:Show()
+            fixBtn:Enable()
+            y = y + ROW_HEIGHT + 12 + BUTTON_HEIGHT
+        elseif not scan then
+            SetNote(L["Edit Mode data is not available yet."], COLOR_MUTED, y)
+            fixBtn:Hide()
+            y = y + ROW_HEIGHT
+        elseif #wrong == 0 then
+            SetNote(L["All settings are correct"], COLOR_OK, y)
+            fixBtn:Hide()
+            y = y + ROW_HEIGHT
         else
-            applyBtn:Enable()
-        end
-    end
-
-    local function Refresh()
-        if not CDM.GetCooldownViewerEditModePolicies then return end
-        ResetApplyButton()
-        local data = CDM:GetCooldownViewerEditModePolicies()
-        currentIsPreset = data.isPresetLayout and true or false
-        presetBanner:SetShown(currentIsPreset)
-        BuildRows(data.policies, UpdateApplyEnabled)
-        UpdateApplyEnabled()
-    end
-
-    overlay:HookScript("OnShow", Refresh)
-
-    local layoutEventFrame = CreateFrame("Frame", nil, overlay)
-    layoutEventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
-    layoutEventFrame:SetScript("OnEvent", function()
-        if overlay:IsShown() then
-            Refresh()
-        end
-    end)
-
-    applyBtn:SetScript("OnClick", function()
-        if not applyBtn:IsEnabled() then return end
-        if not CDM.ApplyCooldownViewerEditModeRecommendedSettings then return end
-
-        local checkedIds = {}
-        for _, row in ipairs(rows) do
-            if row:IsShown() and row.checkbox:GetChecked() and row.policyId then
-                checkedIds[#checkedIds + 1] = row.policyId
+            for i, entry in ipairs(wrong) do
+                local row = GetRow(i)
+                row.label:SetText(L[entry.label])
+                local names = {}
+                for _, idx in ipairs(entry.viewers) do
+                    names[#names + 1] = L[VIEWER_LABELS[idx]]
+                end
+                row.viewers:SetText(table.concat(names, ", "))
+                row:Show()
             end
+            y = y + #wrong * ROW_HEIGHT
+
+            if scan.isPreset then
+                warning = L["Active layout is a preset. Switch to or create a custom layout to save changes."]
+            end
+            if warning then
+                SetNote(warning, COLOR_MUTED, y + 6)
+                y = y + NOTE_HEIGHT
+            else
+                note:Hide()
+            end
+            fixBtn:Show()
+            fixBtn:SetEnabled(not scan.isPreset)
+            y = y + 12 + BUTTON_HEIGHT
         end
 
-        local result = CDM:ApplyCooldownViewerEditModeRecommendedSettings(checkedIds)
+        window:SetSize(WINDOW_WIDTH, y + BOTTOM_PADDING)
+    end
 
-        if result == "applied" then
-            overlay:Hide()
+    fixBtn:SetScript("OnClick", function()
+        if pendingReload then
+            ReloadUI()
             return
         end
-
-        if result == "noop" then
-            disclaimerPending = true
-            applyBtn:SetText(L["All settings are correct"])
-            applyBtn:SetWidth(APPLY_DISCLAIMER_WIDTH)
-            applyBtn:Disable()
-            C_Timer.After(2, function()
-                if not disclaimerPending then return end
-                disclaimerPending = false
-                applyBtn:SetText(L["Apply"])
-                applyBtn:SetWidth(APPLY_WIDTH)
-                UpdateApplyEnabled()
-            end)
+        local result = FixLayout()
+        if result == "in_combat" then
+            Refresh(L["Cannot change Edit Mode settings in combat."])
+            return
         end
+        if result == "saved" then
+            pendingReload = true
+        end
+        Refresh()
     end)
 
-    cancelBtn:SetScript("OnClick", function() overlay:Hide() end)
+    overlay:HookScript("OnShow", function() Refresh() end)
+    CDM:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED", function()
+        if overlay:IsShown() then Refresh() end
+    end)
 
     return overlay
 end

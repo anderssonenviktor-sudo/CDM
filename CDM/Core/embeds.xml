@@ -7,7 +7,6 @@
     <Script file="SpellUtils.lua"/>
     <Script file="CooldownFormatter.lua"/>
     <Script file="Style.lua"/>
-    <Script file="EditMode.lua"/>
     <Script file="Layout/Layout.lua"/>
     <Script file="Layout/Reanchor.lua"/>
     <Script file="GroupContainerUtils.lua"/>
