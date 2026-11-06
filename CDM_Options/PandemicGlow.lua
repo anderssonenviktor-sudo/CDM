@@ -143,7 +143,12 @@ function ns.BuildPandemicGlow(parent, onHeightChanged)
         Dropdown("style", "Glow Style", styles)
         if capabilities.color then
             Dropdown("colorMode", "Glow Color", colors)
-            if settings.colorMode == "custom" then Color("Custom Color", "r", "g", "b") end
+            if settings.colorMode == "custom" then
+                Color("Custom Color", "r", "g", "b")
+            else
+                -- Glow.lua centers the preview icon on this dropdown; keep the next row clear of it.
+                y = y - 20
+            end
         end
         if capabilities.alpha then Slider("alpha", "Glow Opacity", 0.1, 1, 0.05) end
         if capabilities.scale then Slider("scale", "Glow Scale", 0.75, 2, 0.05) end

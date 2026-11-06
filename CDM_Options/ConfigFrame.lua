@@ -461,7 +461,11 @@ function API:RebuildConfigFrame(targetTab)
         return
     end
 
+    local savedPoint, savedRelTo, savedRelPoint, savedX, savedY
     if ConfigFrame then
+        -- The rebuilt frame would otherwise reset to its default CENTER anchor.
+        savedPoint, savedRelTo, savedRelPoint, savedX, savedY = ConfigFrame:GetPoint(1)
+
         API:UnregisterPositionSliderUpdater("essential")
         API:UnregisterPositionSliderUpdater("buff")
         API:UnregisterPositionSliderUpdater("buffBar")
@@ -485,6 +489,10 @@ function API:RebuildConfigFrame(targetTab)
         ns.SelectProfilesSubTab = nil
     end
     CreateConfigFrame()
+    if savedPoint then
+        ConfigFrame:ClearAllPoints()
+        ConfigFrame:SetPoint(savedPoint, UIParent, savedRelPoint, savedX, savedY)
+    end
     ConfigFrame:Show()
 
     local tabToSelect = targetTab == "importexport" and "profiles" or (targetTab or "profiles")
