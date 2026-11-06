@@ -24,9 +24,9 @@ local LEFT_WIDTH = Shared.LEFT_WIDTH
 local SCROLL_LEFT_PAD = Shared.SCROLL_LEFT_PAD
 local RIGHT_X = Shared.RIGHT_X
 local ICON_SIZE = 30
-local ROW_HEIGHT = 36
-local GROUP_HEADER_H = 28
-local ARROW_BTN_SIZE = 29
+local ROW_HEIGHT = Shared.SPELL_ROW_H
+local GROUP_HEADER_H = Shared.GROUP_HEADER_H
+local GROUP_GAP = Shared.GROUP_GAP
 local GRID_ICON_SIZE = 32
 local GRID_ICON_GAP = 2
 local GRID_MIN_ICON_SIZE = 24
@@ -1368,7 +1368,6 @@ local function CreateBuffGroupsPanel(page)
         rc:SetHeight(math.abs(yOff) + 20)
     end
 
-    local btnRefs = {}
     local ShowSpellPickerPanel
     local customBuffPopup
     local customBuffPopupContent
@@ -1379,12 +1378,6 @@ local function CreateBuffGroupsPanel(page)
             highlightAlpha = 0.2,
             resetBorder = function(border) ApplyConfiguredBorderColor(border) end,
         })
-
-    local function UpdateAddIconButtonState()
-        if btnRefs.icon then
-            btnRefs.icon:SetEnabled(selectedGroupIndex ~= nil)
-        end
-    end
 
     ShowSpellPickerPanel = function(groupIndex)
         pickerActiveGroupIndex = groupIndex
@@ -1657,7 +1650,7 @@ local function CreateBuffGroupsPanel(page)
 
     do
         local addGroupBtn = UI.CreateTextButton(buttonRow)
-        addGroupBtn:SetSize(90, 22)
+        addGroupBtn:SetSize(Shared.GROUP_ROW_W, 22)
         addGroupBtn:SetPoint("LEFT", 0, 0)
         addGroupBtn:SetText(L["Add Group"])
         addGroupBtn:SetScript("OnClick", function()
@@ -1694,18 +1687,6 @@ local function CreateBuffGroupsPanel(page)
             RefreshLeftPanelIfNeeded()
             ShowGroupSettings(newIndex)
         end)
-        btnRefs.group = addGroupBtn
-
-        local addIconBtn = UI.CreateTextButton(buttonRow)
-        addIconBtn:SetSize(90, 22)
-        addIconBtn:SetPoint("LEFT", addGroupBtn, "RIGHT", 6, 0)
-        addIconBtn:SetText(L["Add Icon"])
-        addIconBtn:SetScript("OnClick", function()
-            if selectedGroupIndex then
-                ShowSpellPickerPanel(selectedGroupIndex)
-            end
-        end)
-        btnRefs.icon = addIconBtn
 
         addCustomBuffButton:SetScript("OnClick", function(self)
             MenuUtil.CreateContextMenu(self, function(_, rootDescription)
@@ -1942,17 +1923,22 @@ local function CreateBuffGroupsPanel(page)
         UpdateGridOverrideBorders()
     end
 
-    local function ConfigureSpellRow(widget, parent, spellID, sourceGroup, y, isActive, spellIndex, spellCount, tooltipOverrides)
+    local function GetGroupSpellTexture(spellID, tooltipOverrides)
+        local cbEntry = GetCustomBuffEntry(spellID)
+        local displayID = (tooltipOverrides and tooltipOverrides[spellID]) or spellID
+        return (cbEntry and cbEntry.icon) or C_Spell.GetSpellTexture(displayID)
+    end
+
+    local function ConfigureSpellRow(widget, parent, spellID, sourceGroup, y, isActive, tooltipOverrides)
         local row = widget.root
         row:SetParent(parent)
         row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", 8, y)
+        row:SetPoint("TOPLEFT", Shared.SPELL_ROW_INSET, y)
 
         local displayID = (tooltipOverrides and tooltipOverrides[spellID]) or spellID
         local iconContainer = widget.iconContainer
         local iconTex = widget.iconTex
-        local cbEntry = GetCustomBuffEntry(spellID)
-        local tex = (cbEntry and cbEntry.icon) or C_Spell.GetSpellTexture(displayID)
+        local tex = GetGroupSpellTexture(spellID, tooltipOverrides)
         if tex then
             iconTex:SetTexture(tex)
         end
@@ -2024,7 +2010,7 @@ local function CreateBuffGroupsPanel(page)
 
         local nameText = widget.nameText
         nameText:ClearAllPoints()
-        nameText:SetPoint("LEFT", iconContainer, "RIGHT", 6, 0)
+        nameText:SetPoint("LEFT", iconContainer, "RIGHT", 8, 0)
         nameText:SetPoint("RIGHT", removeBtn:IsShown() and removeBtn or row, removeBtn:IsShown() and "LEFT" or "RIGHT", removeBtn:IsShown() and -2 or -4, 0)
         local displayName = C_Spell.GetSpellName(displayID) or L["Unknown"]
         local cbEntry = GetCustomBuffEntry(spellID)
@@ -2032,44 +2018,14 @@ local function CreateBuffGroupsPanel(page)
             displayName = displayName .. "  |cff888888" .. cbEntry.duration .. "s|r"
         end
         nameText:SetText(displayName)
-        if isActive == false then
-            UI.SetTextMuted(nameText)
-        elseif selectedSpellID == spellID then
+        local isSelected = selectedSpellID == spellID and selectedSpellGroupIndex == sourceGroup
+        Shared.SetSpellRowSelected(widget, isSelected)
+        if isSelected then
             UI.SetTextWhite(nameText)
+        elseif isActive == false then
+            UI.SetTextMuted(nameText)
         else
             UI.SetTextSubtle(nameText)
-        end
-
-        widget.btnUp:Hide()
-        widget.btnUp:SetScript("OnClick", nil)
-        widget.btnDown:Hide()
-        widget.btnDown:SetScript("OnClick", nil)
-        if sourceGroup and spellIndex and spellCount then
-            widget.btnUp:Show()
-            widget.btnUp:SetEnabled(spellIndex ~= 1)
-            widget.btnUp:SetScript("OnClick", function()
-                local groups = GetSpecGroups()
-                if not groups or not groups[sourceGroup] then return end
-                local spells = groups[sourceGroup].spells
-                if spells and spellIndex > 1 then
-                    spells[spellIndex], spells[spellIndex - 1] = spells[spellIndex - 1], spells[spellIndex]
-                    SaveAndRefresh()
-                    RefreshLeftPanelIfNeeded()
-                end
-            end)
-
-            widget.btnDown:Show()
-            widget.btnDown:SetEnabled(spellIndex ~= spellCount)
-            widget.btnDown:SetScript("OnClick", function()
-                local groups = GetSpecGroups()
-                if not groups or not groups[sourceGroup] then return end
-                local spells = groups[sourceGroup].spells
-                if spells and spellIndex < #spells then
-                    spells[spellIndex], spells[spellIndex + 1] = spells[spellIndex + 1], spells[spellIndex]
-                    SaveAndRefresh()
-                    RefreshLeftPanelIfNeeded()
-                end
-            end)
         end
 
         widget.clickBtn:SetScript("OnClick", function(_, button)
@@ -2149,12 +2105,22 @@ local function CreateBuffGroupsPanel(page)
                 local isExpanded = expandedGroups[groupIndex] ~= false
                 local displayName = groupData.name or ("Group " .. groupIndex)
 
+                local groupSpells = groupData.spells
+                local previewTextures
+                if not isExpanded and groupSpells then
+                    previewTextures = {}
+                    for i = 1, math.min(#groupSpells, 5) do
+                        previewTextures[i] = GetGroupSpellTexture(groupSpells[i], tooltipOverrideMap) or 134400
+                    end
+                end
+
                 local h = headerPool:Acquire(lc)
-                Shared.ConfigureExpandableHeader(h, yOff, isExpanded, displayName, selectedGroupIndex == groupIndex)
+                Shared.ConfigureExpandableHeader(h, yOff, isExpanded, displayName, selectedGroupIndex == groupIndex,
+                    previewTextures)
 
                 if renameActiveGroupIndex == groupIndex then
                     renameActiveEditBox = Shared.SetupRenameEditBox(
-                        h.row, h.bgLeft, h.bgRight, h.nameText,
+                        h.row, h.bgLeft, h.deleteBtn, h.nameText,
                         displayName,
                         function(newName)
                             groupData.name = newName
@@ -2296,8 +2262,7 @@ local function CreateBuffGroupsPanel(page)
                     local groupContainerWidget = groupContainerPool:Acquire(lc)
                     local groupContainer = groupContainerWidget.root
                     groupContainer:ClearAllPoints()
-                    groupContainer:SetPoint("TOPLEFT", SCROLL_LEFT_PAD, yOff)
-                    local spellY = 0
+                    groupContainer:SetPoint("TOPLEFT", SCROLL_LEFT_PAD, yOff)                    local spellY = 0
                     local spells = groupData.spells
                     local targetLabel = string.format(L["Move to %s"], groupData.name or L["Group"])
                     RegisterDropTarget(groupContainer, groupIndex, {
@@ -2306,7 +2271,6 @@ local function CreateBuffGroupsPanel(page)
                         showInsertion = not spells or #spells == 0,
                     })
                     if groupData.spells then
-                        local spellCount = #groupData.spells
                         for spellIdx, spellID in ipairs(groupData.spells) do
                             local active = not isViewingPlayer or IsSpellInActiveSet(activeSpellSet, spellID) or IsCustomBuffSpell(spellID)
                             local spellWidget = spellRowPool:Acquire(groupContainer)
@@ -2317,8 +2281,6 @@ local function CreateBuffGroupsPanel(page)
                                 groupIndex,
                                 spellY,
                                 active,
-                                spellIdx,
-                                spellCount,
                                 tooltipOverrideMap
                             )
                             RegisterDropTarget(spellWidget.root, groupIndex, {
@@ -2338,13 +2300,13 @@ local function CreateBuffGroupsPanel(page)
                     end
 
                     groupContainer:SetHeight(math.abs(spellY) + 4)
-                    yOff = yOff + spellY
+                    yOff = yOff + spellY - 4
                 end
+                yOff = yOff - GROUP_GAP
             end
         end
 
         lc:SetHeight(math.abs(yOff) + 4)
-        UpdateAddIconButtonState()
     end
 
     RefreshAll = function()

@@ -55,52 +55,6 @@ function Shared.GetGrowLabel(growValue)
     return UI.GetOptionLabel(Shared.GROW_OPTIONS, growValue, growValue or "RIGHT")
 end
 
-function Shared.CreateArrowButton(parent, direction, size, iconScale)
-    local btn = CreateFrame("Button", nil, parent)
-    btn:SetSize(size, size)
-    local icons = {}
-    local offsets = { { 0, 0 }, { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }
-    local iconSize = math.floor(size * (iconScale or 0.72))
-    for i, offset in ipairs(offsets) do
-        local icon = btn:CreateTexture(nil, "ARTWORK", nil, i)
-        icon:SetPoint("CENTER", offset[1], offset[2])
-        icon:SetSize(iconSize, iconSize)
-        icon:SetTexture("Interface\\AddOns\\CDM\\Media\\Textures\\collapse")
-        icon:SetVertexColor(1, 0.82, 0, 1)
-        icon:SetAlpha(0.8)
-        icons[i] = icon
-    end
-
-    function btn:SetArrowDirection(nextDirection)
-        local rotation = nextDirection == "up" and math.pi or 0
-        for _, icon in ipairs(icons) do
-            icon:SetRotation(rotation)
-        end
-    end
-    btn:SetArrowDirection(direction)
-
-    local function SetIconState(alpha, desaturated)
-        for _, icon in ipairs(icons) do
-            icon:SetDesaturated(desaturated)
-            icon:SetAlpha(alpha)
-        end
-    end
-
-    btn:SetScript("OnEnter", function()
-        if btn:IsEnabled() then SetIconState(1, false) end
-    end)
-    btn:SetScript("OnLeave", function()
-        SetIconState(btn:IsEnabled() and 0.8 or 0.3, not btn:IsEnabled())
-    end)
-    btn:SetScript("OnDisable", function()
-        SetIconState(0.3, true)
-    end)
-    btn:SetScript("OnEnable", function()
-        SetIconState(btn:IsMouseOver() and 1 or 0.8, false)
-    end)
-    return btn
-end
-
 function Shared.IsUsableSpellID(spellID)
     return API.IsSafeNumber(spellID) and spellID > 0 and spellID == math.floor(spellID)
 end
@@ -609,101 +563,216 @@ function Shared.CreateDragDropController(config)
 end
 
 local HEADER_SCROLL_LEFT_PAD = 54
-local HEADER_VISIBLE_W = 226
+local GROUP_ROW_W = 226
 local HEADER_GROUP_H = 28
-local HEADER_DELETE_BTN_SIZE = 24
-local HEADER_ATLAS_W = 198
+local HEADER_DELETE_BTN_SIZE = 20
+local HEADER_PREVIEW_MAX = 5
+local HEADER_PREVIEW_SIZE = 16
+local HEADER_PREVIEW_GAP = 2
+local HEADER_CHEVRON_W = 24
+-- Spell rows sit inside the card's 1px border so their selection fill can
+-- span the full card width.
+local SPELL_ROW_INSET = 1
+local SPELL_ROW_PAD = 8
+local SPELL_ROW_H = 32
+local SPELL_ICON_SIZE = 28
+local SELECTED_ACCENT_W = 2
 
-function Shared.CreateExpandableHeader(parent, yOff, isExpanded, displayName, isSelected)
-    local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(HEADER_VISIBLE_W, HEADER_GROUP_H)
-    row:SetPoint("TOPLEFT", HEADER_SCROLL_LEFT_PAD, yOff)
+-- Same surface and border values as UI.CreateTextButton, so the group list
+-- matches the rest of the options window.
+local CARD_BORDER_COLOR = { 0.25, 0.25, 0.28, 1 }
+local HEADER_BG_COLOR = { 0.05, 0.05, 0.055, 0.95 }
+local HEADER_BG_HOVER_COLOR = { 0.095, 0.095, 0.105, 0.95 }
+local BODY_BG_COLOR = { 0.03, 0.03, 0.035, 0.9 }
+local SELECTED_ACCENT_COLOR = { 1, 0.82, 0, 0.8 }
+local SELECTED_ROW_BG_COLOR = { 1, 0.82, 0, 0.08 }
+local DELETE_IDLE_COLOR = { 0.5, 0.5, 0.5, 1 }
+local DELETE_HOVER_COLOR = { 1, 0.267, 0.267, 1 }
 
-    local bgLeft = row:CreateTexture(nil, "BACKGROUND")
-    bgLeft:SetAtlas("Options_ListExpand_Left", true)
-    bgLeft:SetPoint("TOPLEFT", 0, 0)
-
-    local bgRight = row:CreateTexture(nil, "BACKGROUND")
-    if isExpanded then
-        bgRight:SetAtlas("Options_ListExpand_Right_Expanded", true)
-    else
-        bgRight:SetAtlas("Options_ListExpand_Right", true)
+local function CreateEdges(frame, layer, sides)
+    local edges = {}
+    for _, side in ipairs(sides) do
+        local tex = frame:CreateTexture(nil, layer)
+        tex:SetColorTexture(unpack(CARD_BORDER_COLOR))
+        if side == "TOP" or side == "BOTTOM" then
+            tex:SetPoint(side .. "LEFT", 0, 0)
+            tex:SetPoint(side .. "RIGHT", 0, 0)
+            tex:SetHeight(1)
+        else
+            tex:SetPoint("TOP" .. side, 0, 0)
+            tex:SetPoint("BOTTOM" .. side, 0, 0)
+            tex:SetWidth(1)
+        end
+        edges[#edges + 1] = tex
     end
-    bgRight:SetPoint("LEFT", bgLeft, "LEFT", HEADER_ATLAS_W - bgRight:GetWidth(), 0)
+    return edges
+end
 
-    local leftW = bgLeft:GetWidth()
-    local leftH = bgLeft:GetHeight()
-    local bgMiddle = row:CreateTexture(nil, "BACKGROUND")
-    bgMiddle:SetAtlas("_Options_ListExpand_Middle")
-    local midW = math.max(1, HEADER_ATLAS_W - leftW - bgRight:GetWidth())
-    bgMiddle:SetSize(midW, leftH)
-    bgMiddle:SetPoint("TOPLEFT", bgLeft, "TOPRIGHT", 0, 0)
+local function CreateSelectedAccent(frame, inset)
+    local accent = frame:CreateTexture(nil, "ARTWORK")
+    accent:SetPoint("TOPLEFT", inset, -inset)
+    accent:SetPoint("BOTTOMLEFT", inset, inset)
+    accent:SetWidth(SELECTED_ACCENT_W)
+    accent:SetColorTexture(unpack(SELECTED_ACCENT_COLOR))
+    accent:Hide()
+    return accent
+end
+
+-- Two rotated bars, matching the chevron drawn by UI.CreateDropdown.
+local function CreateHeaderChevron(frame)
+    local first = frame:CreateTexture(nil, "OVERLAY")
+    local second = frame:CreateTexture(nil, "OVERLAY")
+    first:SetSize(6, 1.5)
+    second:SetSize(6, 1.5)
+    local chevron = { first, second }
+    function chevron.SetExpanded(expanded)
+        first:ClearAllPoints()
+        second:ClearAllPoints()
+        if expanded then
+            first:SetPoint("CENTER", frame, "CENTER", -2, 0)
+            second:SetPoint("CENTER", frame, "CENTER", 2, 0)
+            first:SetRotation(-math.pi / 4)
+            second:SetRotation(math.pi / 4)
+        else
+            first:SetPoint("CENTER", frame, "CENTER", 0, 2)
+            second:SetPoint("CENTER", frame, "CENTER", 0, -2)
+            first:SetRotation(-math.pi / 4)
+            second:SetRotation(math.pi / 4)
+        end
+    end
+    function chevron.SetBrightness(value)
+        first:SetColorTexture(value, value, value, 1)
+        second:SetColorTexture(value, value, value, 1)
+    end
+    return chevron
+end
+
+Shared.GROUP_ROW_W = GROUP_ROW_W
+Shared.GROUP_HEADER_H = HEADER_GROUP_H
+Shared.GROUP_GAP = 8
+Shared.SPELL_ROW_H = SPELL_ROW_H
+Shared.SPELL_ROW_INSET = SPELL_ROW_INSET
+
+-- Grey cross that turns red on hover, so destructive buttons stay out of the
+-- way until the cursor is on them.
+function Shared.StyleQuietDeleteButton(button, iconSize, tooltipText)
+    local icon = UI.ApplyCrossIcon(button)
+    icon:SetSize(iconSize, iconSize)
+    icon:SetVertexColor(unpack(DELETE_IDLE_COLOR))
+    button:SetScript("OnEnter", function(self)
+        icon:SetVertexColor(unpack(DELETE_HOVER_COLOR))
+        if tooltipText then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tooltipText)
+            GameTooltip:Show()
+        end
+    end)
+    button:SetScript("OnLeave", function()
+        icon:SetVertexColor(unpack(DELETE_IDLE_COLOR))
+        if tooltipText then GameTooltip:Hide() end
+    end)
+    return icon
+end
+
+function Shared.CreateExpandableHeader(parent)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(GROUP_ROW_W, HEADER_GROUP_H)
+
+    -- `bg` spans the whole header; the rename box anchors its left edge to it.
+    local bg = row:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(unpack(HEADER_BG_COLOR))
+    CreateEdges(row, "BORDER", { "TOP", "BOTTOM", "LEFT", "RIGHT" })
+    local selectedAccent = CreateSelectedAccent(row, 1)
 
     local nameText = row:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-    nameText:SetPoint("LEFT", bgLeft, "LEFT", 8, 0)
-    nameText:SetPoint("RIGHT", bgRight, "LEFT", -4, 0)
     nameText:SetJustifyH("LEFT")
-    nameText:SetText(displayName)
-    if isSelected then
-        UI.SetTextWhite(nameText)
-    else
-        UI.SetTextMuted(nameText)
-    end
+    nameText:SetWordWrap(false)
 
-    local deleteBtn = CreateFrame("Button", nil, row)
-    deleteBtn:SetSize(HEADER_DELETE_BTN_SIZE, HEADER_DELETE_BTN_SIZE)
-    deleteBtn:SetPoint("RIGHT", 0, 1)
-    deleteBtn:SetFrameLevel(row:GetFrameLevel() + 2)
-    UI.ApplyCrossIcon(deleteBtn)
+    local expandBtn = CreateFrame("Button", nil, row)
+    expandBtn:SetPoint("TOPRIGHT", 0, 0)
+    expandBtn:SetPoint("BOTTOMRIGHT", 0, 0)
+    expandBtn:SetWidth(HEADER_CHEVRON_W)
+    expandBtn:SetFrameLevel(row:GetFrameLevel() + 1)
+    local chevron = CreateHeaderChevron(expandBtn)
 
     local selectBtn = CreateFrame("Button", nil, row)
     selectBtn:SetPoint("TOPLEFT", 0, 0)
-    selectBtn:SetPoint("BOTTOMRIGHT", row, "BOTTOMLEFT", HEADER_ATLAS_W - bgRight:GetWidth(), 0)
+    selectBtn:SetPoint("BOTTOMRIGHT", expandBtn, "BOTTOMLEFT", 0, 0)
     selectBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
-    local expandBtn = CreateFrame("Button", nil, row)
-    expandBtn:SetPoint("TOPLEFT", bgRight, "TOPLEFT", 0, 0)
-    expandBtn:SetPoint("BOTTOMRIGHT", bgRight, "BOTTOMRIGHT", 0, 0)
-    expandBtn:SetFrameLevel(row:GetFrameLevel() + 1)
+    local deleteBtn = CreateFrame("Button", nil, row)
+    deleteBtn:SetSize(HEADER_DELETE_BTN_SIZE, HEADER_DELETE_BTN_SIZE)
+    deleteBtn:SetPoint("RIGHT", expandBtn, "LEFT", 0, 0)
+    deleteBtn:SetFrameLevel(row:GetFrameLevel() + 2)
+    Shared.StyleQuietDeleteButton(deleteBtn, 18, L["Delete Group"])
+
+    local function UpdateHover()
+        local hovered = row:IsMouseOver()
+        bg:SetColorTexture(unpack(hovered and HEADER_BG_HOVER_COLOR or HEADER_BG_COLOR))
+        chevron.SetBrightness(hovered and 1 or 0.75)
+    end
+    for _, child in ipairs({ selectBtn, expandBtn, deleteBtn }) do
+        child:HookScript("OnEnter", UpdateHover)
+        child:HookScript("OnLeave", UpdateHover)
+    end
+    row:HookScript("OnShow", UpdateHover)
+    chevron.SetBrightness(0.75)
+
+    local previews = {}
+    for i = 1, HEADER_PREVIEW_MAX do
+        local tex = row:CreateTexture(nil, "ARTWORK")
+        tex:SetSize(HEADER_PREVIEW_SIZE, HEADER_PREVIEW_SIZE)
+        if i == 1 then
+            tex:SetPoint("RIGHT", deleteBtn, "LEFT", -4, 0)
+        else
+            tex:SetPoint("RIGHT", previews[i - 1], "LEFT", -HEADER_PREVIEW_GAP, 0)
+        end
+        tex:Hide()
+        previews[i] = tex
+    end
 
     return {
         row = row,
-        bgLeft = bgLeft,
-        bgRight = bgRight,
-        bgMiddle = bgMiddle,
+        bgLeft = bg,
         nameText = nameText,
         deleteBtn = deleteBtn,
         selectBtn = selectBtn,
         expandBtn = expandBtn,
+        chevron = chevron,
+        previews = previews,
+        selectedAccent = selectedAccent,
     }
 end
 
-function Shared.ConfigureExpandableHeader(header, yOff, isExpanded, displayName, isSelected)
+-- previewTextures is only drawn while collapsed, so a closed group can still be
+-- recognised by its first few icons.
+function Shared.ConfigureExpandableHeader(header, yOff, isExpanded, displayName, isSelected, previewTextures)
     if not header then return end
 
-    header.row:SetSize(HEADER_VISIBLE_W, HEADER_GROUP_H)
+    header.row:SetSize(GROUP_ROW_W, HEADER_GROUP_H)
     header.row:ClearAllPoints()
     header.row:SetPoint("TOPLEFT", HEADER_SCROLL_LEFT_PAD, yOff)
+    header.chevron.SetExpanded(isExpanded)
 
-    header.bgLeft:SetAtlas("Options_ListExpand_Left", true)
-    header.bgLeft:ClearAllPoints()
-    header.bgLeft:SetPoint("TOPLEFT", 0, 0)
-
-    if isExpanded then
-        header.bgRight:SetAtlas("Options_ListExpand_Right_Expanded", true)
-    else
-        header.bgRight:SetAtlas("Options_ListExpand_Right", true)
+    local shownPreviews = 0
+    for i, tex in ipairs(header.previews) do
+        local texture = not isExpanded and previewTextures and previewTextures[i]
+        if texture then
+            tex:SetTexture(texture)
+            CDM_C.ApplyIconTexCoord(tex, CDM_C.GetEffectiveZoomAmount())
+            tex:Show()
+            shownPreviews = i
+        else
+            tex:SetTexture(nil)
+            tex:Hide()
+        end
     end
-    header.bgRight:ClearAllPoints()
-    header.bgRight:SetPoint("LEFT", header.bgLeft, "LEFT", HEADER_ATLAS_W - header.bgRight:GetWidth(), 0)
 
-    local leftW = header.bgLeft:GetWidth()
-    local leftH = header.bgLeft:GetHeight()
-    local midW = math.max(1, HEADER_ATLAS_W - leftW - header.bgRight:GetWidth())
-    header.bgMiddle:SetSize(midW, leftH)
-    header.bgMiddle:ClearAllPoints()
-    header.bgMiddle:SetPoint("TOPLEFT", header.bgLeft, "TOPRIGHT", 0, 0)
-
+    header.nameText:ClearAllPoints()
+    header.nameText:SetPoint("LEFT", header.bgLeft, "LEFT", 10, 0)
+    local rightAnchor = shownPreviews > 0 and header.previews[shownPreviews] or header.deleteBtn
+    header.nameText:SetPoint("RIGHT", rightAnchor, "LEFT", -6, 0)
     header.nameText:Show()
     header.nameText:SetText(displayName)
     if isSelected then
@@ -712,16 +781,22 @@ function Shared.ConfigureExpandableHeader(header, yOff, isExpanded, displayName,
         UI.SetTextMuted(header.nameText)
     end
 
+    header.selectedAccent:SetShown(isSelected and true or false)
     header.deleteBtn:Show()
     header.selectBtn:Show()
     header.expandBtn:Show()
 end
 
-function Shared.SetupRenameEditBox(headerRow, bgLeft, bgRight, nameText, currentName, onCommit, onCancel)
+function Shared.SetSpellRowSelected(widget, isSelected)
+    widget.selectedBg:SetShown(isSelected and true or false)
+    widget.selectedAccent:SetShown(isSelected and true or false)
+end
+
+function Shared.SetupRenameEditBox(headerRow, bgLeft, rightAnchor, nameText, currentName, onCommit, onCancel)
     nameText:Hide()
     local editBox = UI.CreateEditBox(headerRow)
     editBox:SetPoint("LEFT", bgLeft, "LEFT", 4, 0)
-    editBox:SetPoint("RIGHT", bgRight, "LEFT", -4, 0)
+    editBox:SetPoint("RIGHT", rightAnchor, "LEFT", -4, 0)
     editBox:SetHeight(18)
     editBox:SetTextInsets(4, 4, 0, 0)
     editBox:SetText(currentName)
@@ -1126,15 +1201,13 @@ end
 
 function Shared.CreateGroupEditorPools(parent, config)
     local CDM = Runtime
-    local leftWidth = Shared.LEFT_WIDTH
-    local iconSize = config and config.iconSize or 30
-    local rowHeight = config and config.rowHeight or 36
-    local arrowSize = config and config.arrowSize or 29
+    local iconSize = SPELL_ICON_SIZE
+    local rowHeight = SPELL_ROW_H
     local highlightAlpha = config and config.highlightAlpha or 0.2
     local resetBorder = config and config.resetBorder
 
     local headerPool = Shared.CreateWidgetPool(function(p)
-        local header = Shared.CreateExpandableHeader(p, 0, false, "", false)
+        local header = Shared.CreateExpandableHeader(p)
         header.root = header.row
         return header
     end, function(header)
@@ -1146,7 +1219,12 @@ function Shared.CreateGroupEditorPools(parent, config)
 
     local groupContainerPool = Shared.CreateWidgetPool(function(p)
         local gc = CreateFrame("Frame", nil, p)
-        gc:SetSize(leftWidth, 10)
+        gc:SetSize(GROUP_ROW_W, 10)
+        local bg = gc:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(unpack(BODY_BG_COLOR))
+        -- No top edge: the header's bottom border closes the card.
+        CreateEdges(gc, "BORDER", { "BOTTOM", "LEFT", "RIGHT" })
         local hl = CreateFrame("Frame", nil, gc, "BackdropTemplate")
         hl:SetAllPoints()
         hl:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
@@ -1161,9 +1239,9 @@ function Shared.CreateGroupEditorPools(parent, config)
 
     local emptyRowPool = Shared.CreateWidgetPool(function(p)
         local f = CreateFrame("Frame", nil, p)
-        f:SetSize(leftWidth, rowHeight)
+        f:SetSize(GROUP_ROW_W, rowHeight)
         local t = f:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-        t:SetPoint("LEFT", 10, 0)
+        t:SetPoint("LEFT", SPELL_ROW_INSET + SPELL_ROW_PAD, 0)
         return { root = f, text = t }
     end, function(widget)
         widget.text:SetText("")
@@ -1171,17 +1249,21 @@ function Shared.CreateGroupEditorPools(parent, config)
 
     local spellRowPool = Shared.CreateWidgetPool(function(p)
         local row = CreateFrame("Frame", nil, p)
-        row:SetSize(leftWidth - 20, rowHeight)
+        row:SetSize(GROUP_ROW_W - SPELL_ROW_INSET * 2, rowHeight)
 
-        local btnUp = Shared.CreateArrowButton(row, "up", arrowSize)
-        btnUp:SetPoint("RIGHT", row, "LEFT", -2 - arrowSize + 2, 0)
-
-        local btnDown = Shared.CreateArrowButton(row, "down", arrowSize)
-        btnDown:SetPoint("RIGHT", row, "LEFT", -2, 0)
+        local hoverBg = row:CreateTexture(nil, "BACKGROUND")
+        hoverBg:SetAllPoints()
+        hoverBg:SetColorTexture(1, 1, 1, 0.04)
+        hoverBg:Hide()
+        local selectedBg = row:CreateTexture(nil, "BACKGROUND", nil, 1)
+        selectedBg:SetAllPoints()
+        selectedBg:SetColorTexture(unpack(SELECTED_ROW_BG_COLOR))
+        selectedBg:Hide()
+        local selectedAccent = CreateSelectedAccent(row, 0)
 
         local iconContainer = CreateFrame("Frame", nil, row)
         iconContainer:SetSize(iconSize, iconSize)
-        iconContainer:SetPoint("LEFT", 0, 0)
+        iconContainer:SetPoint("LEFT", SPELL_ROW_PAD, 0)
         local iconTex = iconContainer:CreateTexture(nil, "ARTWORK")
         iconTex:SetAllPoints()
         CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
@@ -1197,20 +1279,30 @@ function Shared.CreateGroupEditorPools(parent, config)
         removeBtn:SetSize(16, 16)
         removeBtn:SetPoint("RIGHT", -6, 0)
         removeBtn:SetFrameLevel(row:GetFrameLevel() + 2)
-        local removeBtnIcon = UI.ApplyCrossIcon(removeBtn)
+        local removeBtnIcon = Shared.StyleQuietDeleteButton(removeBtn, 20, L["Remove from group"])
 
         local nameText = row:CreateFontString(nil, "OVERLAY", "CDM_Font12")
         nameText:SetJustifyH("LEFT")
+        nameText:SetWordWrap(false)
 
         local clickBtn = CreateFrame("Button", nil, row)
         clickBtn:SetAllPoints()
         clickBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         clickBtn:RegisterForDrag("LeftButton")
 
+        local function UpdateHover()
+            hoverBg:SetShown(row:IsMouseOver())
+        end
+        for _, child in ipairs({ clickBtn, removeBtn }) do
+            child:HookScript("OnEnter", UpdateHover)
+            child:HookScript("OnLeave", UpdateHover)
+        end
+        row:HookScript("OnShow", UpdateHover)
+
         return {
             root = row,
-            btnUp = btnUp,
-            btnDown = btnDown,
+            selectedBg = selectedBg,
+            selectedAccent = selectedAccent,
             iconContainer = iconContainer,
             iconTex = iconTex,
             removeBtn = removeBtn,
@@ -1219,10 +1311,7 @@ function Shared.CreateGroupEditorPools(parent, config)
             clickBtn = clickBtn,
         }
     end, function(widget)
-        widget.btnUp:Hide()
-        widget.btnUp:SetScript("OnClick", nil)
-        widget.btnDown:Hide()
-        widget.btnDown:SetScript("OnClick", nil)
+        Shared.SetSpellRowSelected(widget, false)
         widget.removeBtn:Hide()
         widget.removeBtn:SetScript("OnClick", nil)
         widget.clickBtn:SetScript("OnClick", nil)

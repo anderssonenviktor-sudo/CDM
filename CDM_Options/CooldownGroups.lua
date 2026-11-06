@@ -127,9 +127,9 @@ local LEFT_WIDTH = Shared.LEFT_WIDTH
 local SCROLL_LEFT_PAD = Shared.SCROLL_LEFT_PAD
 local RIGHT_X = Shared.RIGHT_X
 local ICON_SIZE = 30
-local ROW_HEIGHT = 36
-local GROUP_HEADER_H = 28
-local ARROW_BTN_SIZE = 29
+local ROW_HEIGHT = Shared.SPELL_ROW_H
+local GROUP_HEADER_H = Shared.GROUP_HEADER_H
+local GROUP_GAP = Shared.GROUP_GAP
 local GRID_ICON_SIZE = 32
 local GRID_MIN_ICON_SIZE = 24
 local GRID_CONTROL_SIZE = 24
@@ -1349,7 +1349,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
         rc:SetHeight(math.abs(yOff) + 20)
     end
 
-    local addIconBtnRef = nil
     local ShowSpellPickerPanel
 
     local headerPool, groupContainerPool, emptyRowPool, spellRowPool =
@@ -2029,21 +2028,28 @@ local function CreateCooldownGroupsPanel(subPage, page)
         return Shared.AcquireEmptyRow(emptyRowPool, parent, text)
     end
 
-    local function ConfigureSpellRow(widget, parent, spellID, sourceGroup, y, isActive, spellIndex, spellCount)
-        local row = widget.root
-        row:SetParent(parent)
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", 8, y)
-
-        local trinketSlot, _, trinketName, trinketIcon = GetTrinketInfoForID(spellID)
-        local customItemID, customItemName, customItemIcon = GetCustomItemInfoForID(spellID)
-        local _, nativeItemName, nativeItemIcon = GetNativeItemCategoryInfo(spellID)
-        local displayID = GetDisplaySpellID(spellID)
-        local tex = (trinketSlot and trinketIcon)
+    local function GetGroupSpellTexture(spellID)
+        local trinketSlot, _, _, trinketIcon = GetTrinketInfoForID(spellID)
+        local customItemID, _, customItemIcon = GetCustomItemInfoForID(spellID)
+        local _, _, nativeItemIcon = GetNativeItemCategoryInfo(spellID)
+        return (trinketSlot and trinketIcon)
             or (customItemID and customItemIcon)
             or nativeItemIcon
             or GetPromotedBuffTexture(spellID)
-            or C_Spell.GetSpellTexture(displayID)
+            or C_Spell.GetSpellTexture(GetDisplaySpellID(spellID))
+    end
+
+    local function ConfigureSpellRow(widget, parent, spellID, sourceGroup, y, isActive)
+        local row = widget.root
+        row:SetParent(parent)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", Shared.SPELL_ROW_INSET, y)
+
+        local trinketSlot, _, trinketName = GetTrinketInfoForID(spellID)
+        local customItemID, customItemName = GetCustomItemInfoForID(spellID)
+        local _, nativeItemName = GetNativeItemCategoryInfo(spellID)
+        local displayID = GetDisplaySpellID(spellID)
+        local tex = GetGroupSpellTexture(spellID)
         if tex then widget.iconTex:SetTexture(tex) end
         CDM_C.ApplyIconTexCoord(widget.iconTex, CDM_C.GetEffectiveZoomAmount())
 
@@ -2094,44 +2100,17 @@ local function CreateCooldownGroupsPanel(subPage, page)
         end
 
         widget.nameText:ClearAllPoints()
-        widget.nameText:SetPoint("LEFT", widget.iconContainer, "RIGHT", 6, 0)
+        widget.nameText:SetPoint("LEFT", widget.iconContainer, "RIGHT", 8, 0)
         widget.nameText:SetPoint("RIGHT", widget.removeBtn:IsShown() and widget.removeBtn or row, widget.removeBtn:IsShown() and "LEFT" or "RIGHT", widget.removeBtn:IsShown() and -2 or -4, 0)
         widget.nameText:SetText((trinketSlot and trinketName)
             or (customItemID and customItemName)
             or nativeItemName
             or C_Spell.GetSpellName(displayID) or L["Unknown"])
-        if isActive == false then UI.SetTextMuted(widget.nameText)
-        elseif selectedSpellID == spellID then UI.SetTextWhite(widget.nameText)
+        local isSelected = selectedSpellID == spellID and selectedSpellGroupIndex == sourceGroup
+        Shared.SetSpellRowSelected(widget, isSelected)
+        if isSelected then UI.SetTextWhite(widget.nameText)
+        elseif isActive == false then UI.SetTextMuted(widget.nameText)
         else UI.SetTextSubtle(widget.nameText) end
-
-        widget.btnUp:Hide()
-        widget.btnUp:SetScript("OnClick", nil)
-        widget.btnDown:Hide()
-        widget.btnDown:SetScript("OnClick", nil)
-        if sourceGroup and spellIndex and spellCount then
-            widget.btnUp:Show()
-            widget.btnUp:SetEnabled(spellIndex ~= 1)
-            widget.btnUp:SetScript("OnClick", function()
-                local groups = GetSpecGroups()
-                if not groups or not groups[sourceGroup] then return end
-                local spells = groups[sourceGroup].spells
-                if spells and spellIndex > 1 then
-                    spells[spellIndex], spells[spellIndex - 1] = spells[spellIndex - 1], spells[spellIndex]
-                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
-                end
-            end)
-            widget.btnDown:Show()
-            widget.btnDown:SetEnabled(spellIndex ~= spellCount)
-            widget.btnDown:SetScript("OnClick", function()
-                local groups = GetSpecGroups()
-                if not groups or not groups[sourceGroup] then return end
-                local spells = groups[sourceGroup].spells
-                if spells and spellIndex < #spells then
-                    spells[spellIndex], spells[spellIndex + 1] = spells[spellIndex + 1], spells[spellIndex]
-                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
-                end
-            end)
-        end
 
         widget.clickBtn:SetScript("OnClick", function()
             selectedSpellID = spellID
@@ -2336,12 +2315,22 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 local isExpanded = expandedGroups[groupIndex] ~= false
                 local displayName = groupData.name or ("Group " .. groupIndex)
 
+                local groupSpells = groupData.spells
+                local previewTextures
+                if not isExpanded and groupSpells then
+                    previewTextures = {}
+                    for i = 1, math.min(#groupSpells, 5) do
+                        previewTextures[i] = GetGroupSpellTexture(groupSpells[i]) or 134400
+                    end
+                end
+
                 local h = headerPool:Acquire(lc)
-                Shared.ConfigureExpandableHeader(h, yOff, isExpanded, displayName, selectedGroupIndex == groupIndex)
+                Shared.ConfigureExpandableHeader(h, yOff, isExpanded, displayName, selectedGroupIndex == groupIndex,
+                    previewTextures)
 
                 if renameActiveGroupIndex == groupIndex then
                     renameActiveEditBox = Shared.SetupRenameEditBox(
-                        h.row, h.bgLeft, h.bgRight, h.nameText,
+                        h.row, h.bgLeft, h.deleteBtn, h.nameText,
                         displayName,
                         function(newName)
                             groupData.name = newName
@@ -2475,8 +2464,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     local groupContainerWidget = groupContainerPool:Acquire(lc)
                     local groupContainer = groupContainerWidget.root
                     groupContainer:ClearAllPoints()
-                    groupContainer:SetPoint("TOPLEFT", SCROLL_LEFT_PAD, yOff)
-                    local spells = groupData.spells
+                    groupContainer:SetPoint("TOPLEFT", SCROLL_LEFT_PAD, yOff)                    local spells = groupData.spells
                     local targetLabel = string.format(L["Move to %s"], groupData.name or L["Group"])
                     RegisterDropTarget(groupContainer, groupIndex, {
                         label = targetLabel,
@@ -2507,9 +2495,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                                 spellID,
                                 groupIndex,
                                 groupY,
-                                active,
-                                spellIndex,
-                                #spells
+                                active
                             )
                             RegisterDropTarget(spellWidget.root, groupIndex, {
                                 label = targetLabel,
@@ -2525,8 +2511,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
                         groupY = -ROW_HEIGHT
                     end
                     groupContainer:SetHeight(math.abs(groupY) + 4)
-                    yOff = yOff + groupY
+                    yOff = yOff + groupY - 4
                 end
+                yOff = yOff - GROUP_GAP
             end
         end
 
@@ -2535,7 +2522,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
     do
         local addGroupBtn = UI.CreateTextButton(buttonRow)
-        addGroupBtn:SetSize(90, 22)
+        addGroupBtn:SetSize(Shared.GROUP_ROW_W, 22)
         addGroupBtn:SetPoint("LEFT", 0, 0)
         addGroupBtn:SetText(L["Add Group"])
         addGroupBtn:SetScript("OnClick", function()
@@ -2570,22 +2557,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
             SaveAndRefresh(); RefreshLeftPanelIfNeeded()
             ShowGroupSettings(newIndex)
         end)
-
-        local addIconBtn = UI.CreateTextButton(buttonRow)
-        addIconBtn:SetSize(90, 22)
-        addIconBtn:SetPoint("LEFT", addGroupBtn, "RIGHT", 6, 0)
-        addIconBtn:SetText(L["Add Icon"])
-        addIconBtn:SetScript("OnClick", function()
-            if selectedGroupIndex then ShowSpellPickerPanel(selectedGroupIndex) end
-        end)
-        addIconBtnRef = addIconBtn
     end
 
     RefreshAll = function()
         lookupCacheBySpec = {}
         BuildIconGrid()
         BuildGroupsPanel()
-        if addIconBtnRef then addIconBtnRef:SetEnabled(selectedGroupIndex ~= nil) end
     end
 
     local lastGridWidth = 0
