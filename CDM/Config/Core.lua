@@ -413,7 +413,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 44
+local DB_SCHEMA_VERSION = 45
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1573,6 +1573,38 @@ local PROFILE_MIGRATIONS = {
                 end
                 entry.readyGlowEnabled = nil
                 entry.readyGlowColor = nil
+            end
+            local function MigrateMap(map)
+                if type(map) ~= "table" then return end
+                for _, entry in pairs(map) do MigrateEntry(entry) end
+            end
+            local groups = profile.cooldownGroups
+            if type(groups) == "table" then
+                for _, specGroups in pairs(groups) do
+                    if type(specGroups) == "table" then
+                        for _, group in pairs(specGroups) do
+                            if type(group) == "table" then MigrateMap(group.spellOverrides) end
+                        end
+                    end
+                end
+            end
+            local ungrouped = profile.ungroupedCooldownOverrides
+            if type(ungrouped) == "table" then
+                for _, specOverrides in pairs(ungrouped) do MigrateMap(specOverrides) end
+            end
+        end,
+    },
+    {
+        -- Glow State no longer has its own color; it follows Override Glow Color.
+        version = 45,
+        run = function(profile)
+            local function MigrateEntry(entry)
+                if type(entry) ~= "table" or entry.glowStateColor == nil then return end
+                if not entry.glowColorOverride and type(entry.glowStateColor) == "table" then
+                    entry.glowColorOverride = true
+                    entry.glowColor = entry.glowStateColor
+                end
+                entry.glowStateColor = nil
             end
             local function MigrateMap(map)
                 if type(map) ~= "table" then return end

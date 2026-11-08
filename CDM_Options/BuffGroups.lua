@@ -320,6 +320,13 @@ local function CreateBuffGroupsPanel(page)
             border:SetFrameLevel(frame:GetFrameLevel() + 1)
             border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
             frame.border = border
+            local highlight = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+            highlight:SetAllPoints()
+            highlight:SetFrameLevel(frame:GetFrameLevel() + 3)
+            highlight:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+            highlight:SetBackdropBorderColor(1, 1, 1, 1)
+            highlight:Hide()
+            frame.highlight = highlight
             local overlay = CreateFrame("Button", nil, frame)
             overlay:SetAllPoints()
             overlay:SetFrameLevel(frame:GetFrameLevel() + 2)
@@ -342,23 +349,14 @@ local function CreateBuffGroupsPanel(page)
     local function UpdateGridOverrideBorders()
         for i = 1, gridIconsActive do
             local frame = gridIcons[i]
-            local override = GetUngroupedOverride(frame.cdmSpellID)
             local color = currentSpecID and CDM.GetSpellBorderColor
                 and CDM:GetSpellBorderColor(currentSpecID, frame.cdmSpellID)
-            local enabled = type(color) == "table"
-            if type(override) == "table" then
-                for _, value in pairs(override) do
-                    if value == true then enabled = true; break end
-                end
-                enabled = enabled or override.showAuraOverlay ~= nil or override.customIcon ~= nil
-                    or override.borderColor ~= nil
-                    or (override.glowType ~= nil and override.glowType ~= "DEFAULT")
-            end
-            if enabled then
-                frame.border:SetBackdropBorderColor(0.25, 0.85, 0.45, 1)
+            if type(color) == "table" then
+                frame.border:SetBackdropBorderColor(color.r, color.g, color.b, 1)
             else
                 frame.border:SetBackdropBorderColor(0.08, 0.08, 0.08, 0.8)
             end
+            frame.highlight:SetShown(selectedSpellID == frame.cdmSpellID and not selectedSpellGroupIndex)
         end
     end
 

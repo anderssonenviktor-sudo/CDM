@@ -134,7 +134,9 @@ local function StyleMenuElement(frame, description)
     if not fontString then return end
 
     local selected = frame.leftTexture2 ~= nil
-    local textLeft = frame.leftTexture1 and 28 or 10
+    -- Radio rows show selection through the gold text and row tint, so they need no mark column.
+    local isRadio = description:IsRadio()
+    local textLeft = (frame.leftTexture1 and not isRadio) and 28 or 10
     fontString:SetFontObject("CDM_Font12")
     fontString:ClearAllPoints()
     fontString:SetPoint("LEFT", textLeft, 0)
@@ -160,16 +162,19 @@ local function StyleMenuElement(frame, description)
         frame.leftTexture1:ClearAllPoints()
         frame.leftTexture1:SetPoint("LEFT", 8, 0)
         frame.leftTexture1:SetSize(12, 12)
-        if description:IsRadio() then
-            -- Single-choice lists only need a mark beside the selected row.
+        if isRadio then
             frame.leftTexture1:Hide()
         end
     end
     if frame.leftTexture2 then
-        frame.leftTexture2:SetAtlas("common-dropdown-icon-checkmark-yellow")
-        frame.leftTexture2:SetSize(14, 14)
-        frame.leftTexture2:ClearAllPoints()
-        frame.leftTexture2:SetPoint("LEFT", 7, 0)
+        if isRadio then
+            frame.leftTexture2:Hide()
+        else
+            frame.leftTexture2:SetAtlas("common-dropdown-icon-checkmark-yellow")
+            frame.leftTexture2:SetSize(14, 14)
+            frame.leftTexture2:ClearAllPoints()
+            frame.leftTexture2:SetPoint("LEFT", 7, 0)
+        end
     end
     if frame.arrow then
         frame.arrow:SetTexture("Interface\\AddOns\\CDM\\Media\\Textures\\collapse")

@@ -408,12 +408,21 @@ local function FindAuraOverlayEntry(frame)
     return nil
 end
 
+-- "Default" overlays use Blizzard's gold swipe while the aura is up.
+local function ApplyOverlaySwipeStyle(frame, cd, entry)
+    if entry.auraDefaultStyle and frame.cooldownUseAuraDisplayTime == true then
+        local ac = CDM_C.AURA_SWIPE_COLOR
+        cd:SetSwipeColor(ac.r, ac.g, ac.b, ac.a)
+        cd:SetDrawEdge(false)
+    else
+        ApplySwipeStyle(cd)
+    end
+end
+
 local function ApplyAuraOverlayActive(frame, frameData, entry)
-    frame.Cooldown:SetReverse(true)
+    frame.Cooldown:SetReverse(not entry.auraDefaultStyle)
     frame.Cooldown:SetAlpha(1)
-    local sc = styleCache.swipeColor or CDM_C.SWIPE_COLOR
-    frame.Cooldown:SetSwipeColor(sc.r, sc.g, sc.b, sc.a)
-    frame.Cooldown:SetDrawEdge(false)
+    ApplyOverlaySwipeStyle(frame, frame.Cooldown, entry)
     frameData.cdmInternalWrite = true
     frame.Cooldown:SetUseAuraDisplayTime(true)
     frameData.cdmInternalWrite = false
@@ -421,20 +430,13 @@ local function ApplyAuraOverlayActive(frame, frameData, entry)
         frame.Icon:SetDesaturation(0)
     end
 
+    -- No color: the icon's Glow Overrides color, else the global glow color.
     if entry.auraGlowEnabled then
-        CDM.Glow:RequestBuffGlow(frame, true, entry.auraGlowColor, nil, entry.glowType)
+        CDM.Glow:RequestBuffGlow(frame, true, entry.glowStateColor, nil, entry.glowType)
         frameData.cdmAuraGlowActive = true
     elseif frameData.cdmAuraGlowActive then
         CDM.Glow:RequestBuffGlow(frame, false)
         frameData.cdmAuraGlowActive = false
-    end
-
-    if entry.auraBorderEnabled then
-        BORDER:ApplyBorderColorOverride(frame, entry.auraBorderColor or DEFAULT_WHITE_COLOR)
-        frameData.cdmAuraBorderActive = true
-    elseif frameData.cdmAuraBorderActive then
-        BORDER:RestoreToCurrentBorderColor(frame)
-        frameData.cdmAuraBorderActive = false
     end
 
     frameData.cdmAuraOverrideActive = true
@@ -450,10 +452,6 @@ local function ApplyAuraOverlayInactive(frame, frameData)
         CDM.Glow:RequestBuffGlow(frame, false)
         frameData.cdmAuraGlowActive = false
     end
-    if frameData.cdmAuraBorderActive then
-        BORDER:RestoreToCurrentBorderColor(frame)
-        frameData.cdmAuraBorderActive = false
-    end
 
     frameData.cdmAuraOverrideActive = true
 end
@@ -462,6 +460,7 @@ local function ClearAuraOverlay(frame, frameData)
     if frameData.cdmAuraOverrideActive then
         frame.Cooldown:SetAlpha(1)
         frame.Cooldown:SetReverse(false)
+        ApplySwipeStyle(frame.Cooldown)
         if frame.Icon then
             frame.Icon:SetDesaturation(0)
         end
@@ -470,10 +469,6 @@ local function ClearAuraOverlay(frame, frameData)
     if frameData.cdmAuraGlowActive then
         CDM.Glow:RequestBuffGlow(frame, false)
         frameData.cdmAuraGlowActive = false
-    end
-    if frameData.cdmAuraBorderActive then
-        BORDER:RestoreToCurrentBorderColor(frame)
-        frameData.cdmAuraBorderActive = false
     end
 end
 
@@ -1295,7 +1290,7 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
 
                     local entry = FindAuraOverlayEntry(frame)
                     if entry and entry.auraOverlay then
-                        ApplySwipeStyle(self)
+                        ApplyOverlaySwipeStyle(frame, self, entry)
                         return
                     end
 

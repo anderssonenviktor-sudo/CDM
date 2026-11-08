@@ -457,18 +457,17 @@ local function BuildMapEntry(entry, isDotDefault, auraOverlay)
     if auraOverlay then
         mapEntry.auraOverlay = true
     end
-    if entry and entry.auraDesaturateInactive ~= nil then
-        mapEntry.auraDesaturateInactive = entry.auraDesaturateInactive
-    elseif isDotDefault then
+    if isDotDefault then
         mapEntry.auraDesaturateInactive = true
     end
     if entry then
-        if entry.auraGlowEnabled then mapEntry.auraGlowEnabled = true end
-        if entry.auraGlowColor then mapEntry.auraGlowColor = entry.auraGlowColor end
-        if entry.auraBorderEnabled then mapEntry.auraBorderEnabled = true end
-        if entry.auraBorderColor then mapEntry.auraBorderColor = entry.auraBorderColor end
+        if entry.auraDefaultStyle then
+            mapEntry.auraDefaultStyle = true
+        elseif entry.auraGlowEnabled then
+            mapEntry.auraGlowEnabled = true
+        end
         if entry.glowState then mapEntry.glowState = entry.glowState end
-        if entry.glowStateColor then mapEntry.glowStateColor = entry.glowStateColor end
+        if entry.glowColorOverride then mapEntry.glowStateColor = entry.glowColor end
         if entry.glowTypeOverride then mapEntry.glowType = entry.glowType end
     end
     return mapEntry

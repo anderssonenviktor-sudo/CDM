@@ -501,7 +501,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
             highlight:SetAllPoints()
             highlight:SetFrameLevel(frame:GetFrameLevel() + 3)
             highlight:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-            highlight:SetBackdropBorderColor(0.85, 0.75, 0.45, 0.9)
+            highlight:SetBackdropBorderColor(1, 1, 1, 1)
             highlight:Hide()
             frame.highlight = highlight
             local overlay = CreateFrame("Button", nil, frame)
@@ -524,38 +524,18 @@ local function CreateCooldownGroupsPanel(subPage, page)
         gridIconsActive = 0
     end
 
-    local function HasEnabledOverride(override)
-        if type(override) ~= "table" then return false end
-        for _, value in pairs(override) do
-            if value == true then return true end
-        end
-        return override.showAuraOverlay ~= nil
-            or override.customIcon ~= nil
-            or override.borderColor ~= nil
-            or (type(override.replaceBuffSpellID) == "number" and override.replaceBuffSpellID > 0)
-            or (type(override.replaceBuffCooldownID) == "number" and override.replaceBuffCooldownID > 0)
-            or (override.glowType ~= nil and override.glowType ~= "DEFAULT")
-    end
-
     local function UpdateGridOverrideBorders()
         for i = 1, gridIconsActive do
             local frame = gridIcons[i]
             local spellID = frame.cdmSpellID
             local promoted = IsCooldownBuffTracked(currentSpecID, spellID)
-            local override = promoted and CDM.GetUngroupedBuffOverride
-                and CDM:GetUngroupedBuffOverride(spellID) or GetUngroupedOverride(spellID)
-            local enabled = HasEnabledOverride(override)
-            if enabled then
-                frame.border:SetBackdropBorderColor(0.25, 0.85, 0.45, 1)
+            local color = promoted and CDM.GetSpellBorderColor and CDM:GetSpellBorderColor(currentSpecID, spellID)
+            if color then
+                frame.border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
             else
-                local color = promoted and CDM.GetSpellBorderColor and CDM:GetSpellBorderColor(currentSpecID, spellID)
-                if color then
-                    frame.border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
-                else
-                    frame.border:SetBackdropBorderColor(0.08, 0.08, 0.08, 0.8)
-                end
+                frame.border:SetBackdropBorderColor(0.08, 0.08, 0.08, 0.8)
             end
-            frame.highlight:SetShown(not enabled and selectedSpellID == spellID and not selectedSpellGroupIndex)
+            frame.highlight:SetShown(selectedSpellID == spellID and not selectedSpellGroupIndex)
         end
     end
 
@@ -1031,102 +1011,39 @@ local function CreateCooldownGroupsPanel(subPage, page)
             yOff = yOff - 36
 
             if showAura then
-                if not isDotDefault then
-                    local desatValue = auraOv and auraOv.auraDesaturateInactive or false
-                    local desatCheckbox = UI.CreateModernCheckbox(
-                        rc,
-                        L["Desaturate when inactive"],
-                        desatValue,
-                        function(checked)
-                            local ov
-                            if groupIndex then
-                                ov = EnsureSpellOverride(groupIndex, spellID)
-                            else
-                                ov = EnsureUngroupedOverrideEntry(spellID)
-                            end
-                            if not ov then return end
-                            ov.auraDesaturateInactive = checked or nil
-                            SaveAndRefresh()
-                        end
-                    )
-                    desatCheckbox:SetPoint("TOPLEFT", 20, yOff)
-                    yOff = yOff - 30
-                end
-
-                local auraGlowEnabled = auraOv and auraOv.auraGlowEnabled or false
+                -- Glow and Default are exclusive; the rebuild unticks the other one.
+                local auraDefaultStyle = auraOv and auraOv.auraDefaultStyle or false
+                local auraGlowEnabled = not auraDefaultStyle and auraOv and auraOv.auraGlowEnabled or false
                 local auraGlowCheckbox = UI.CreateModernCheckbox(
                     rc,
-                    L["Aura Glow"],
+                    L["Glow"],
                     auraGlowEnabled,
                     function(checked)
-                        local ov
-                        if groupIndex then
-                            ov = EnsureSpellOverride(groupIndex, spellID)
-                        else
-                            ov = EnsureUngroupedOverrideEntry(spellID)
-                        end
+                        local ov = EnsureCooldownOverride()
                         if not ov then return end
                         ov.auraGlowEnabled = checked or nil
+                        if checked then ov.auraDefaultStyle = nil end
                         SaveAndRefresh()
+                        ShowSpellSettings(spellID, groupIndex)
                     end
                 )
                 auraGlowCheckbox:SetPoint("TOPLEFT", 20, yOff)
                 yOff = yOff - 30
 
-                local agcLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-                agcLabel:SetText(L["Glow Color:"])
-                agcLabel:SetPoint("TOPLEFT", 20, yOff)
-                local agcInit = (auraOv and auraOv.auraGlowColor) or { r = 1, g = 1, b = 1 }
-                local agcPicker = UI.CreateSimpleColorPicker(rc, agcInit, function(r, g, b)
-                    local ov
-                    if groupIndex then
-                        ov = EnsureSpellOverride(groupIndex, spellID)
-                    else
-                        ov = EnsureUngroupedOverrideEntry(spellID)
-                    end
-                    if not ov then return end
-                    ov.auraGlowColor = { r = r, g = g, b = b }
-                    SaveAndRefresh()
-                end)
-                agcPicker:SetPoint("LEFT", agcLabel, "RIGHT", 6, 0)
-                yOff = yOff - 30
-
-                local auraBorderEnabled = auraOv and auraOv.auraBorderEnabled or false
-                local auraBorderCheckbox = UI.CreateModernCheckbox(
+                local auraDefaultCheckbox = UI.CreateModernCheckbox(
                     rc,
-                    L["Aura Border Color"],
-                    auraBorderEnabled,
+                    L["Default"],
+                    auraDefaultStyle,
                     function(checked)
-                        local ov
-                        if groupIndex then
-                            ov = EnsureSpellOverride(groupIndex, spellID)
-                        else
-                            ov = EnsureUngroupedOverrideEntry(spellID)
-                        end
+                        local ov = EnsureCooldownOverride()
                         if not ov then return end
-                        ov.auraBorderEnabled = checked or nil
+                        ov.auraDefaultStyle = checked or nil
+                        if checked then ov.auraGlowEnabled = nil end
                         SaveAndRefresh()
+                        ShowSpellSettings(spellID, groupIndex)
                     end
                 )
-                auraBorderCheckbox:SetPoint("TOPLEFT", 20, yOff)
-                yOff = yOff - 30
-
-                local abcLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-                abcLabel:SetText(L["Border Color:"])
-                abcLabel:SetPoint("TOPLEFT", 20, yOff)
-                local abcInit = (auraOv and auraOv.auraBorderColor) or { r = 1, g = 1, b = 1 }
-                local abcPicker = UI.CreateSimpleColorPicker(rc, abcInit, function(r, g, b)
-                    local ov
-                    if groupIndex then
-                        ov = EnsureSpellOverride(groupIndex, spellID)
-                    else
-                        ov = EnsureUngroupedOverrideEntry(spellID)
-                    end
-                    if not ov then return end
-                    ov.auraBorderColor = { r = r, g = g, b = b, a = 1 }
-                    SaveAndRefresh()
-                end)
-                abcPicker:SetPoint("LEFT", abcLabel, "RIGHT", 6, 0)
+                auraDefaultCheckbox:SetPoint("TOPLEFT", 20, yOff)
                 yOff = yOff - 30
             end
 
@@ -1139,6 +1056,13 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 { value = "active", label = L["Active"] },
                 { value = "inactive", label = L["Inactive"] },
             }
+
+            yOff = yOff - 10
+            local glowHeader = rc:CreateFontString(nil, "ARTWORK", "CDM_Font18")
+            glowHeader:SetPoint("TOPLEFT", 0, yOff)
+            glowHeader:SetText(L["Glow Overrides"])
+            glowHeader:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
+            yOff = yOff - 34
 
             local glowStateLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
             glowStateLabel:SetText(L["Glow State"])
@@ -1160,25 +1084,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 end)
             yOff = yOff - 40
 
-            if glowState then
-                local gscLabel = rc:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-                gscLabel:SetText(L["Glow Color:"])
-                gscLabel:SetPoint("TOPLEFT", 20, yOff)
-                local gscInit = auraOv.glowStateColor or { r = 1, g = 1, b = 1 }
-                local gscPicker = UI.CreateSimpleColorPicker(rc, gscInit, function(r, g, b)
-                    local ov = EnsureCooldownOverride()
-                    if not ov then return end
-                    ov.glowStateColor = { r = r, g = g, b = b }
-                    SaveAndRefresh()
-                end)
-                gscPicker:SetPoint("LEFT", gscLabel, "RIGHT", 6, 0)
-                yOff = yOff - 30
-            end
-
             local glowColorOverride = auraOv and auraOv.glowColorOverride or false
-            local glowHeader = UI.CreateSubHeader(rc, L["Glow Overrides"])
-            glowHeader:SetPoint("TOPLEFT", 0, yOff)
-            yOff = yOff - 32
 
             local glowOverrideCheckbox = UI.CreateModernCheckbox(
                 rc,

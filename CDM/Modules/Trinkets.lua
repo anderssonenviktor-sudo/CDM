@@ -203,16 +203,14 @@ local function UpdateIcon(frame, forceStyle)
         if CDM.IsSafeNumber(duration) and CDM.IsSafeNumber(expiration)
             and duration > 0 and expiration > GetTime() then
             frame.Cooldown:SetCooldown(expiration - duration, duration)
-            frame.Cooldown:SetReverse(true)
+            frame.Cooldown:SetReverse(not override.auraDefaultStyle)
             auraActive = true
         end
     end
     if not auraActive then frame.Cooldown:SetReverse(false) end
 
     if frame.Icon then
-        local desaturateInactive = override and override.showAuraOverlay
-            and override.auraDesaturateInactive and not auraActive
-        frame.Icon:SetDesaturation((desaturateInactive or isOnCooldown and not auraActive) and 1 or 0)
+        frame.Icon:SetDesaturation((isOnCooldown and not auraActive) and 1 or 0)
     end
 
     local fd = CDM.GetFrameData(frame)
@@ -223,14 +221,17 @@ local function UpdateIcon(frame, forceStyle)
     if CDM.ApplyCooldownCustomIcon then
         CDM:ApplyCooldownCustomIcon(frame)
     end
-    if auraActive and override.auraBorderEnabled and CDM.BORDER then
-        CDM.BORDER:ApplyBorderColorOverride(frame, override.auraBorderColor or CDM_C.WHITE)
-        fd.cdmTrinketAuraBorderActive = true
-    elseif fd.cdmTrinketAuraBorderActive and CDM.BORDER then
-        CDM.BORDER:RestoreToCurrentBorderColor(frame)
-        fd.cdmTrinketAuraBorderActive = nil
+    local defaultSwipe = auraActive and override.auraDefaultStyle
+    if defaultSwipe then
+        local ac = CDM_C.AURA_SWIPE_COLOR
+        frame.Cooldown:SetSwipeColor(ac.r, ac.g, ac.b, ac.a)
+        fd.cdmTrinketAuraSwipeActive = true
+    elseif fd.cdmTrinketAuraSwipeActive then
+        local sc = CDM.db and CDM.db.swipeColor or CDM_C.SWIPE_COLOR
+        frame.Cooldown:SetSwipeColor(sc.r, sc.g, sc.b, sc.a)
+        fd.cdmTrinketAuraSwipeActive = nil
     end
-    local auraGlow = override and override.auraGlowEnabled and auraActive
+    local auraGlow = override and override.auraGlowEnabled and not override.auraDefaultStyle and auraActive
     local glowState = override and override.glowState
     local hasAura = auraActive
     if (glowState == "active" or glowState == "inactive") and not override.showAuraOverlay then
@@ -248,10 +249,7 @@ local function UpdateIcon(frame, forceStyle)
     elseif glowState == "inactive" then
         stateGlow = not hasAura
     end
-    local glowColor = auraGlow and override.auraGlowColor or stateGlow and override.glowStateColor
-    if (auraGlow or stateGlow) and override.glowColorOverride then
-        glowColor = override.glowColor or glowColor
-    end
+    local glowColor = (auraGlow or stateGlow) and override.glowColorOverride and override.glowColor or nil
     local glowType = override and override.glowTypeOverride and override.glowType or nil
     if auraGlow or stateGlow then
         if CDM.Glow and (not fd.cdmTrinketOverrideGlowActive

@@ -44,6 +44,14 @@ CDM.CONST = {
         a = 0.6,
     },
 
+    -- Blizzard's CooldownViewerConstants.ITEM_AURA_COLOR.
+    AURA_SWIPE_COLOR = {
+        r = 1,
+        g = 0.95,
+        b = 0.57,
+        a = 0.7,
+    },
+
     TEX_WHITE8X8 = "Interface\\Buttons\\WHITE8X8",
 
     STRATA_MAIN = "MEDIUM",
