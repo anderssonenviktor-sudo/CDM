@@ -167,9 +167,18 @@ end
 
 ns.ConfigCreatePage = CreateCategoryPage
 
-local categoryHeaders = {
-    { tabs = {"layout", "buffgroups", "bars", "glow", "castbar", "resources", "border"} },
-    { divider = true, tabs = {"profiles"} },
+local navTabs = { "layout", "buffgroups", "bars", "glow", "castbar", "resources", "border", "profiles" }
+
+local SIDEBAR_WIDTH = 180
+local SIDEBAR_DIVIDER_X = 16
+local CONTENT_X = 35
+local CONTENT_RIGHT_INSET = 13
+
+-- Distance from a page's edges out to the sidebar divider and the panel border,
+-- so pages can draw lines that join them.
+ns.ConfigContentEdges = {
+    left = CONTENT_X - SIDEBAR_DIVIDER_X,
+    right = CONTENT_RIGHT_INSET,
 }
 
 local function CreateConfigFrame()
@@ -328,17 +337,16 @@ local function CreateConfigFrame()
     local Sidebar = CreateFrame("Frame", nil, ConfigFrame)
     Sidebar:SetPoint("TOPLEFT", panelBgHolder, "TOPLEFT", 1, 0)
     Sidebar:SetPoint("BOTTOMLEFT", panelBgHolder, "BOTTOMLEFT", 1, 0)
-    Sidebar:SetWidth(180)
+    Sidebar:SetWidth(SIDEBAR_WIDTH)
 
     local sidebarDivider = panelBgHolder:CreateTexture(nil, "BORDER")
-    sidebarDivider:SetColorTexture(0.22, 0.22, 0.24, 0.45)
-    sidebarDivider:SetWidth(1)
-    sidebarDivider:SetPoint("TOPLEFT", Sidebar, "TOPRIGHT", 16, -12)
-    sidebarDivider:SetPoint("BOTTOMLEFT", Sidebar, "BOTTOMRIGHT", 16, 12)
+    UI.StyleBorderLine(sidebarDivider, true)
+    sidebarDivider:SetPoint("TOPLEFT", Sidebar, "TOPRIGHT", SIDEBAR_DIVIDER_X, 0)
+    sidebarDivider:SetPoint("BOTTOMLEFT", Sidebar, "BOTTOMRIGHT", SIDEBAR_DIVIDER_X, 0)
 
     local Content = CreateFrame("Frame", nil, ConfigFrame)
-    Content:SetPoint("TOPLEFT", Sidebar, "TOPRIGHT", 35, 0)
-    Content:SetPoint("BOTTOMRIGHT", panelBgHolder, "BOTTOMRIGHT", -13, 0)
+    Content:SetPoint("TOPLEFT", Sidebar, "TOPRIGHT", CONTENT_X, 0)
+    Content:SetPoint("BOTTOMRIGHT", panelBgHolder, "BOTTOMRIGHT", -CONTENT_RIGHT_INSET, 0)
 
     ns.ConfigContent = Content
     ns.ConfigFrame = ConfigFrame
@@ -358,20 +366,21 @@ local function CreateConfigFrame()
     local function AddNav(id, label, y, indent)
         indent = indent or 0
         local btn = CreateFrame("Button", nil, Sidebar)
-        btn:SetSize(175 - indent, 32)
-        btn:SetPoint("TOPLEFT", indent, y)
+        -- Rows span from the panel border to the sidebar divider; indent only shifts the label.
+        btn:SetSize(SIDEBAR_WIDTH + SIDEBAR_DIVIDER_X, UI.SUB_TAB_HEIGHT)
+        btn:SetPoint("TOPLEFT", 0, y)
 
         btn.Background = btn:CreateTexture(nil, "BACKGROUND")
         btn.Background:SetAllPoints()
 
         btn.Selection = btn:CreateTexture(nil, "ARTWORK")
         btn.Selection:SetColorTexture(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 0.85)
-        btn.Selection:SetWidth(2)
-        btn.Selection:SetPoint("TOPLEFT", 4, -7)
-        btn.Selection:SetPoint("BOTTOMLEFT", 4, 7)
+        btn.Selection:SetWidth(3)
+        btn.Selection:SetPoint("TOPRIGHT", 0, 0)
+        btn.Selection:SetPoint("BOTTOMRIGHT", 0, 0)
 
         btn.Text = btn:CreateFontString(nil, "OVERLAY", "CDM_Font14")
-        btn.Text:SetPoint("LEFT", btn, "LEFT", 14, 0)
+        btn.Text:SetPoint("LEFT", btn, "LEFT", indent + 14, 0)
         btn.Text:SetPoint("RIGHT", btn, "RIGHT", -10, 0)
         btn.Text:SetJustifyH("LEFT")
         btn.Text:SetWordWrap(false)
@@ -394,30 +403,21 @@ local function CreateConfigFrame()
         buttons[id] = btn
     end
 
-    local yOffset = -12
+    -- First row lines up with the sub-tab buttons on the content side.
+    local yOffset = -UI.SUB_TAB_TOP
     local tabIndent = 8
+    local NAV_ROW_GAP = 4
 
-    for _, category in ipairs(categoryHeaders) do
-        if category.divider then
-            local divider = Sidebar:CreateTexture(nil, "ARTWORK")
-            divider:SetColorTexture(0.3, 0.3, 0.32, 0.4)
-            divider:SetSize(147, 1)
-            divider:SetPoint("TOPLEFT", 22, yOffset - 10)
-            yOffset = yOffset - 30
+    for _, tabId in ipairs(navTabs) do
+        local tabDef = ns.ConfigTabs and ns.ConfigTabs[tabId]
+        if tabDef then
+            AddNav(tabDef.id, tabDef.label, yOffset, tabIndent)
+            yOffset = yOffset - UI.SUB_TAB_HEIGHT - NAV_ROW_GAP
         end
-
-        for _, tabId in ipairs(category.tabs) do
-            local tabDef = ns.ConfigTabs and ns.ConfigTabs[tabId]
-            if tabDef then
-                AddNav(tabDef.id, tabDef.label, yOffset, tabIndent)
-                yOffset = yOffset - 38
-            end
-        end
-
     end
 
     -- open on the sidebar's first entry (navOrder only governs page build order)
-    local firstNavTab = categoryHeaders[1] and categoryHeaders[1].tabs[1]
+    local firstNavTab = navTabs[1]
     if firstNavTab and ns.ConfigTabs and ns.ConfigTabs[firstNavTab] then
         SelectCategory(firstNavTab)
     elseif sortedTabs[1] then

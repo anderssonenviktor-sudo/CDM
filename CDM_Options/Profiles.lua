@@ -367,7 +367,7 @@ local function CreateProfilesTab(page)
     local tabBar = UI.CreateSubTabBar(page, {
         { id = "manage", label = L["Manage"] },
         { id = "importexport", label = L["Import/Export"] },
-    }, "manage")
+    }, "manage", nil, true)
     ns.SelectProfilesSubTab = tabBar.selectTab
     CreateProfileManagementTab(tabBar.subPages.manage)
     ns.CreateImportExportTab(tabBar.subPages.importexport)

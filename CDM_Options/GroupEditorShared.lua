@@ -930,6 +930,30 @@ Shared.RIGHT_X = 35 + 240 + 40
 Shared.SLIDER_LABEL_W = 120
 Shared.SLIDER_W = 200
 
+-- Lines through the Add Group row out to the sidebar divider and panel border,
+-- plus one down between the group list and the settings panel.
+-- The Add Group button sits at LEFT_INSET, and buttonRow stops rowRightInset short of the page edge.
+function Shared.CreateGroupEditorLines(page, buttonRow, addGroupBtn, rowRightInset)
+    local edges = ns.ConfigContentEdges or { left = 0, right = 0 }
+
+    local leftLine = buttonRow:CreateTexture(nil, "ARTWORK")
+    UI.StyleBorderLine(leftLine)
+    leftLine:SetPoint("LEFT", addGroupBtn, "LEFT", -(Shared.LEFT_INSET + edges.left), 0)
+    leftLine:SetPoint("RIGHT", addGroupBtn, "LEFT", 0, 0)
+
+    local rightLine = buttonRow:CreateTexture(nil, "ARTWORK")
+    UI.StyleBorderLine(rightLine)
+    rightLine:SetPoint("LEFT", addGroupBtn, "RIGHT", 0, 0)
+    rightLine:SetPoint("RIGHT", buttonRow, "RIGHT", rowRightInset + edges.right, 0)
+
+    -- Centered in the gap, which also keeps it clear of the list's scrollbar.
+    local columnX = (Shared.LEFT_INSET + GROUP_ROW_W + Shared.RIGHT_X) / 2
+    local columnLine = buttonRow:CreateTexture(nil, "ARTWORK")
+    UI.StyleBorderLine(columnLine, true)
+    columnLine:SetPoint("TOPLEFT", addGroupBtn, "LEFT", columnX - Shared.LEFT_INSET, 0)
+    columnLine:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", columnX, 0)
+end
+
 function Shared.DestroyFrame(frame)
     if not frame then return end
     frame:Hide()

@@ -61,10 +61,6 @@ local function PositionDropdown(rc, label, key, yOff, positions)
 end
 
 local function BuildCooldownText(subPage, page)
-    local divider = subPage:CreateTexture(nil, "ARTWORK")
-    UI.StyleDivider(divider)
-    divider:SetPoint("TOP", subPage, "TOP", 0, 0)
-
     local rc, sc = UI.MakeSubPageScroll(subPage, "CDM_CooldownTextScrollFrame")
     -- The timer section is wider than the helper's default scroll child width.
     sc:GetParent():HookScript("OnSizeChanged", function(_, w) sc:SetWidth(w) end)
@@ -205,10 +201,6 @@ end
 ns._CreateCooldownTextPanel = BuildCooldownText
 
 local function BuildBuffIcons(subPage, page)
-    local divider = subPage:CreateTexture(nil, "ARTWORK")
-    UI.StyleDivider(divider)
-    divider:SetPoint("TOP", subPage, "TOP", 0, 0)
-
     local rc = CreateFrame("Frame", nil, subPage)
     rc:SetPoint("TOPLEFT", 30, -15)
     rc:SetPoint("BOTTOMRIGHT", -20, 10)

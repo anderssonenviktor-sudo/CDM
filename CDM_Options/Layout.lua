@@ -13,7 +13,7 @@ local function CreateLayoutTab(page, tabId)
         { id = "cooldowns", label = L["Cooldowns"] },
         { id = "general", label = L["General"] },
         { id = "text", label = L["Text"] },
-    }, "cooldowns", 100)
+    }, "cooldowns", 100, true)
 
     local subPages = tabBar.subPages
 
@@ -24,10 +24,6 @@ local function CreateLayoutTab(page, tabId)
     ns._CreateCooldownTextPanel(subPages.text, page)
 
     local generalPage = subPages.general
-
-    local divider = generalPage:CreateTexture(nil, "ARTWORK")
-    UI.StyleDivider(divider)
-    divider:SetPoint("TOP", generalPage, "TOP", 0, 0)
 
     local content, scrollFrame = UI.CreateScrollableTab(generalPage, "CDM_LayoutGeneralScrollFrame", 520)
     local scrollChild = scrollFrame:GetScrollChild()

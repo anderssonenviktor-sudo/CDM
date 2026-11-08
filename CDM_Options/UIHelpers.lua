@@ -68,6 +68,16 @@ function UI.StyleDivider(texture)
     texture:SetHeight(1)
 end
 
+-- Same color and thickness as the idle outline of UI.CreateTextButton.
+function UI.StyleBorderLine(texture, vertical)
+    texture:SetColorTexture(0.25, 0.25, 0.28, 1)
+    if vertical then
+        texture:SetWidth(1)
+    else
+        texture:SetHeight(1)
+    end
+end
+
 local ConfigMenuStyle = CreateFromMixins(MenuStyle1Mixin)
 local MENU_INSET = { left = 1, right = 1, top = 1, bottom = 1 }
 local MENU_ROW_HEIGHT = 26
@@ -1553,12 +1563,35 @@ function UI.GetOptionLabel(options, value, default)
     return default or value
 end
 
-function UI.CreateSubTabBar(parent, tabs, initialTab, fixedTabWidth)
-    local TAB_HEIGHT = 37
+-- Page-level tabs start just below the panel's top border. The sidebar nav rows use the
+-- same values so the selected row lines up with the selected tab.
+UI.SUB_TAB_TOP = 1
+UI.SUB_TAB_HEIGHT = 38
+
+-- pageLevel: for tab bars placed directly on a config category page. Matches the sidebar
+-- rows and font, and draws a line under the tabs out to the sidebar divider and panel border.
+function UI.CreateSubTabBar(parent, tabs, initialTab, fixedTabWidth, pageLevel)
+    -- Page-level tabs line up with page content, which starts at the group editors' LEFT_INSET.
+    local BAR_INSET = pageLevel and 35 or 30
+    local barTop, barHeight, tabHeight
+    if pageLevel then
+        barTop, barHeight, tabHeight = UI.SUB_TAB_TOP, UI.SUB_TAB_HEIGHT, UI.SUB_TAB_HEIGHT
+    else
+        barTop, barHeight, tabHeight = 2, 37, 33
+    end
     local barFrame = CreateFrame("Frame", nil, parent)
-    barFrame:SetPoint("TOPLEFT", parent, "TOPLEFT", 30, -2)
-    barFrame:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -30, -2)
-    barFrame:SetHeight(TAB_HEIGHT)
+    barFrame:SetPoint("TOPLEFT", parent, "TOPLEFT", BAR_INSET, -barTop)
+    barFrame:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -BAR_INSET, -barTop)
+    barFrame:SetHeight(barHeight)
+
+    if pageLevel then
+        local edges = ns.ConfigContentEdges or { left = 0, right = 0 }
+        local baseline = barFrame:CreateTexture(nil, "ARTWORK")
+        UI.StyleBorderLine(baseline)
+        -- Sits just below the bar so the selected tab's underline stays inside the tab.
+        baseline:SetPoint("TOPLEFT", barFrame, "BOTTOMLEFT", -(BAR_INSET + edges.left), 0)
+        baseline:SetPoint("TOPRIGHT", barFrame, "BOTTOMRIGHT", BAR_INSET + edges.right, 0)
+    end
 
     local subPages = {}
     local tabButtons = {}
@@ -1568,7 +1601,7 @@ function UI.CreateSubTabBar(parent, tabs, initialTab, fixedTabWidth)
         button.selected = active
         button.Underline:SetShown(active)
         if active then
-            button.Background:SetColorTexture(1, 1, 1, 0.045)
+            button.Background:SetColorTexture(1, 1, 1, 0.055)
             button.label:SetTextColor(1, 1, 1, 1)
         else
             button.Background:SetColorTexture(1, 1, 1, 0)
@@ -1595,18 +1628,18 @@ function UI.CreateSubTabBar(parent, tabs, initialTab, fixedTabWidth)
     local prevBtn
     for _, info in ipairs(tabs) do
         local btn = CreateFrame("Button", nil, barFrame)
-        btn:SetHeight(TAB_HEIGHT - 4)
+        btn:SetHeight(tabHeight)
 
         btn.Background = btn:CreateTexture(nil, "BACKGROUND")
         btn.Background:SetAllPoints()
         btn.Underline = btn:CreateTexture(nil, "ARTWORK")
         btn.Underline:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 0.8)
-        btn.Underline:SetHeight(2)
-        btn.Underline:SetPoint("BOTTOMLEFT", 8, 0)
-        btn.Underline:SetPoint("BOTTOMRIGHT", -8, 0)
+        btn.Underline:SetHeight(3)
+        btn.Underline:SetPoint("BOTTOMLEFT", 0, 0)
+        btn.Underline:SetPoint("BOTTOMRIGHT", 0, 0)
 
-        local label = btn:CreateFontString(nil, "OVERLAY", "CDM_Font12")
-        label:SetPoint("CENTER", 0, 1)
+        local label = btn:CreateFontString(nil, "OVERLAY", pageLevel and "CDM_Font14" or "CDM_Font12")
+        label:SetPoint("CENTER", 0, 0)
         label:SetText(info.label)
         btn.label = label
 
@@ -1623,7 +1656,7 @@ function UI.CreateSubTabBar(parent, tabs, initialTab, fixedTabWidth)
         btn:SetScript("OnClick", function() SelectTab(info.id) end)
         btn:SetScript("OnEnter", function(self)
             if not self.selected then
-                self.Background:SetColorTexture(1, 1, 1, 0.025)
+                self.Background:SetColorTexture(1, 1, 1, 0.035)
                 self.label:SetTextColor(0.9, 0.9, 0.9, 1)
             end
         end)
@@ -1631,7 +1664,7 @@ function UI.CreateSubTabBar(parent, tabs, initialTab, fixedTabWidth)
         tabButtons[info.id] = btn
 
         local pg = CreateFrame("Frame", nil, parent)
-        pg:SetPoint("TOPLEFT", barFrame, "BOTTOMLEFT", -30, 0)
+        pg:SetPoint("TOPLEFT", barFrame, "BOTTOMLEFT", -BAR_INSET, 0)
         pg:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
         pg:Hide()
         pg.controls = {}

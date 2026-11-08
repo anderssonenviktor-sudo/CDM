@@ -47,10 +47,6 @@ StaticPopupDialogs["CDM_CONFIRM_DELETE_GROUP"] = {
 }
 
 local function CreateBuffGroupsPanel(page)
-    local divider = page:CreateTexture(nil, "ARTWORK")
-    UI.StyleDivider(divider)
-    divider:SetPoint("TOP", page, "TOP", 0, 0)
-
     local si = GetSpecialization()
     local currentSpecID = si and GetSpecializationInfo(si) or nil
     local playerSpecID = currentSpecID
@@ -1653,6 +1649,8 @@ local function CreateBuffGroupsPanel(page)
         addGroupBtn:SetSize(Shared.GROUP_ROW_W, 22)
         addGroupBtn:SetPoint("LEFT", 0, 0)
         addGroupBtn:SetText(L["Add Group"])
+        Shared.CreateGroupEditorLines(page, buttonRow, addGroupBtn, 10)
+
         addGroupBtn:SetScript("OnClick", function()
             local specGroups = EnsureBuffGroups()
             if not specGroups then return end
@@ -2370,14 +2368,11 @@ local function CreateBuffGroupsTab(page)
         { id = "buffs", label = L["Buffs"] },
         { id = "general", label = L["General"] },
         { id = "text", label = L["Text"] },
-    }, "buffs", 100)
+    }, "buffs", 100, true)
     CreateBuffGroupsPanel(tabBar.subPages.buffs)
     ns._CreateBuffTextPanel(tabBar.subPages.text, page)
 
     local generalPage = tabBar.subPages.general
-    local divider = generalPage:CreateTexture(nil, "ARTWORK")
-    UI.StyleDivider(divider)
-    divider:SetPoint("TOP", generalPage, "TOP", 0, 0)
 
     local content = UI.CreateScrollableTab(generalPage, "CDM_BuffGeneralScrollFrame", 690)
     local header = UI.CreateHeader(content, L["Buff"])

@@ -153,9 +153,6 @@ StaticPopupDialogs["CDM_CONFIRM_DELETE_CD_GROUP"] = {
 
 local function CreateCooldownGroupsPanel(subPage, page)
     local dbKey = "cooldownGroups"
-    local tex = subPage:CreateTexture(nil, "ARTWORK")
-    UI.StyleDivider(tex)
-    tex:SetPoint("TOP", subPage, "TOP", 0, 0)
 
     local si = GetSpecialization()
     local currentSpecID = si and GetSpecializationInfo(si) or nil
@@ -2525,6 +2522,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
         addGroupBtn:SetSize(Shared.GROUP_ROW_W, 22)
         addGroupBtn:SetPoint("LEFT", 0, 0)
         addGroupBtn:SetText(L["Add Group"])
+        Shared.CreateGroupEditorLines(subPage, buttonRow, addGroupBtn, 10)
+
         addGroupBtn:SetScript("OnClick", function()
             local specGroups = EnsureGroups()
             if not specGroups then return end
