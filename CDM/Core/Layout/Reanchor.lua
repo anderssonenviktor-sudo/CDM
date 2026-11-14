@@ -80,7 +80,7 @@ local function SortAndPositionBuffFrames(frames, container)
 
     local df = CDM.defaults or {}
     local sizeBuff = GetConfigValue("sizeBuff", df.sizeBuff) or { w = 40, h = 36 }
-    local spacing = GetConfigValue("spacing", df.spacing) or 1
+    local spacing = GetConfigValue("buffSpacing", df.buffSpacing) or 1
     local itemW, itemH, gap, step = GetSnappedBuffMetrics(sizeBuff, spacing)
 
     local shownCount = 0

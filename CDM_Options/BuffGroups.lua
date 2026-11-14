@@ -2379,8 +2379,8 @@ local function CreateBuffGroupsTab(page)
     width:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -15)
     local height = ns.CreateIconSizeSlider(content, L["Height"], "sizeBuff", "h")
     height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, -10)
-    local spacing = UI.CreateModernSlider(content, L["Icon Spacing"], -1, 30, CDM.db.spacing, function(v)
-        CDM.db.spacing = v
+    local spacing = UI.CreateModernSlider(content, L["Icon Spacing"], -1, 30, CDM.db.buffSpacing, function(v)
+        CDM.db.buffSpacing = v
         API:Refresh("LAYOUT")
     end)
     spacing:SetPoint("TOPLEFT", height, "BOTTOMLEFT", 0, -10)

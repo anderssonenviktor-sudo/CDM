@@ -182,6 +182,7 @@ CDM.defaults = {
     sizeUtility = { w = 46, h = 40 },
     sizeBuff = { w = 40, h = 36 },
     spacing = 1,
+    buffSpacing = 1,
     maxRowEss = 9,
     utilityAnchor = "essential",
     utilityYOffset = 0,

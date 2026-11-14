@@ -514,8 +514,6 @@ function CDM:RebuildAuraOverlayEnabledMap()
                             end
                         elseif ov and ov.showAuraOverlay == true then
                             AddToSpellMap(spellToEntry, spellID, BuildMapEntry(ov, DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[spellID], true))
-                        elseif DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[spellID] then
-                            AddToSpellMap(spellToEntry, spellID, BuildMapEntry(ov, true, true))
                         elseif ov and ov.glowState then
                             AddToSpellMap(spellToEntry, spellID, BuildMapEntry(ov, false, false))
                         end
@@ -536,22 +534,9 @@ function CDM:RebuildAuraOverlayEnabledMap()
                     end
                 elseif entry.showAuraOverlay == true then
                     AddToSpellMap(spellToEntry, sid, BuildMapEntry(entry, DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[sid], true))
-                elseif DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[sid] then
-                    AddToSpellMap(spellToEntry, sid, BuildMapEntry(entry, true, true))
                 elseif entry.glowState then
                     AddToSpellMap(spellToEntry, sid, BuildMapEntry(entry, false, false))
                 end
-            end
-        end
-    end
-
-    if DOT_OVERRIDE_SPELLS then
-        for spellID in pairs(DOT_OVERRIDE_SPELLS) do
-            if not seen[spellID] then
-                seen[spellID] = true
-                local mapEntry = BuildMapEntry(nil, true, true)
-                mapEntry.dotDefaultOnly = true
-                AddToSpellMap(spellToEntry, spellID, mapEntry)
             end
         end
     end
@@ -576,17 +561,7 @@ function CDM:RebuildAuraOverlayEnabledMap()
                                 match = spellToEntry[info.overrideSpellID]
                             end
                             if not match then
-                                local baseEntry = spellToEntry[info.spellID]
-                                if baseEntry then
-                                    local overrideIsDot = hasDistinctOverride
-                                        and DOT_OVERRIDE_SPELLS
-                                        and DOT_OVERRIDE_SPELLS[info.overrideSpellID]
-                                    if hasDistinctOverride and baseEntry.dotDefaultOnly and not overrideIsDot then
-                                        -- suppress: pure DOT auto-add must not leak to a non-DOT override
-                                    else
-                                        match = baseEntry
-                                    end
-                                end
+                                match = spellToEntry[info.spellID]
                             end
                         end
                         if not match and info.linkedSpellIDs then
@@ -598,17 +573,9 @@ function CDM:RebuildAuraOverlayEnabledMap()
                             end
                         end
                         if not match then
-                            local hasDistinctOverride = IsSafeNumber(info.overrideSpellID)
-                                and info.overrideSpellID ~= info.spellID
-                            local overrideIsDot = hasDistinctOverride
-                                and DOT_OVERRIDE_SPELLS
-                                and DOT_OVERRIDE_SPELLS[info.overrideSpellID]
                             CDM:ForEachSpellMatchCandidate(info.spellID, function(candidate)
                                 local entry = spellToEntry[candidate]
                                 if not entry then return end
-                                if hasDistinctOverride and entry.dotDefaultOnly and not overrideIsDot then
-                                    return
-                                end
                                 match = entry
                                 return true
                             end)

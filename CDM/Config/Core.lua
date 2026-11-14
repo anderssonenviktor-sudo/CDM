@@ -413,7 +413,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 45
+local DB_SCHEMA_VERSION = 46
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1623,6 +1623,15 @@ local PROFILE_MIGRATIONS = {
             local ungrouped = profile.ungroupedCooldownOverrides
             if type(ungrouped) == "table" then
                 for _, specOverrides in pairs(ungrouped) do MigrateMap(specOverrides) end
+            end
+        end,
+    },
+    {
+        -- Buff icons used the shared cooldown spacing; seed their own key so the gap doesn't jump.
+        version = 46,
+        run = function(profile)
+            if type(profile.spacing) == "number" and profile.buffSpacing == nil then
+                profile.buffSpacing = profile.spacing
             end
         end,
     },

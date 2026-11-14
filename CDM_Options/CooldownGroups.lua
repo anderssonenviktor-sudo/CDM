@@ -121,7 +121,6 @@ local function SaveAndRefresh()
 end
 local DestroyFrame = Shared.DestroyFrame
 local CreateSlider = Shared.CreateSlider
-local DOT_OVERRIDE_SPELLS = CDM_C.DOT_OVERRIDE_SPELLS
 local LEFT_INSET = Shared.LEFT_INSET
 local LEFT_WIDTH = Shared.LEFT_WIDTH
 local SCROLL_LEFT_PAD = Shared.SCROLL_LEFT_PAD
@@ -978,13 +977,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 yOff = yOff - 40
             end
 
-            local isDotDefault = DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[spellID]
-            local showAura
-            if auraOv and auraOv.showAuraOverlay ~= nil then
-                showAura = auraOv.showAuraOverlay
-            else
-                showAura = isDotDefault or false
-            end
+            local showAura = auraOv and auraOv.showAuraOverlay == true or false
 
             local auraCheckbox = UI.CreateModernCheckbox(
                 rc,
@@ -998,11 +991,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
                         ov = EnsureUngroupedOverrideEntry(spellID)
                     end
                     if not ov then return end
-                    if checked then
-                        ov.showAuraOverlay = isDotDefault and nil or true
-                    else
-                        ov.showAuraOverlay = false
-                    end
+                    -- nil is off; stale false values from the old DoT auto-default read as off too.
+                    ov.showAuraOverlay = checked and true or nil
                     SaveAndRefresh()
                     ShowSpellSettings(spellID, groupIndex)
                 end

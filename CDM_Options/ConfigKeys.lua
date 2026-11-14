@@ -32,6 +32,7 @@ ns.ConfigKeys = {
                 "sizeUtility",
                 "sizeBuff",
                 "spacing",
+                "buffSpacing",
                 "maxRowEss",
                 "utilityWrap",
                 "maxRowUtil",
