@@ -85,7 +85,7 @@ function CDM:ApplySpellAppearanceOverrides(frame, vName)
     state.busy = true
     local entry = self:ResolveCooldownSpellOverride(frame)
     local hide = false
-    local aura = frame.cooldownUseAuraDisplayTime == true and fd.cdmAuraOverrideActive
+    local aura = CDM.IsAuraDisplayActive(frame) and fd.cdmAuraOverrideActive
     if entry and entry.suppressGCD and not aura then
         local id = self:ResolveLiveCooldownSpell(frame)
         local _, recharging = ChargeState(id)

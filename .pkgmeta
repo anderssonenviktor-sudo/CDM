@@ -10,6 +10,7 @@ manual-changelog: CDM/CDM/CHANGELOG.md
 
 ignore:
  - .vscode/
+ - .claude/
  - AGENTS.md
  - .docs/
  - .fixtures/

@@ -22,6 +22,57 @@ local GetSpellCooldownDuration = C_Spell.GetSpellCooldownDuration
 local GetSpellChargeDuration = C_Spell.GetSpellChargeDuration
 local GetConfigValue = CDM_C.GetConfigValue
 
+local issecretvalue = issecretvalue
+
+local GetAuraDuration = C_UnitAuras and C_UnitAuras.GetAuraDuration
+local GetAuraDataByAuraInstanceID = C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID
+
+local function IsSecretValue(v)
+    return issecretvalue and issecretvalue(v) or false
+end
+
+-- Whether Blizzard itself put the linked aura's time on the cooldown.
+local function IsBlizzardAuraDisplay(frame)
+    if frame.cooldownUseAuraDisplayTime == true then return true end
+    local fromAura = frame.wasSetFromAura
+    return not IsSecretValue(fromAura) and fromAura == true
+end
+
+-- Whether the icon's linked aura is up. Current clients still track the aura
+-- (auraInstanceID) but often leave the spell cooldown on the icon. Only
+-- nil-check auraInstanceID: it can be secret, and comparing it taints.
+local function IsAuraDisplayActive(frame)
+    return IsBlizzardAuraDisplay(frame) or frame.auraInstanceID ~= nil
+end
+CDM.IsAuraDisplayActive = IsAuraDisplayActive
+
+-- Puts the tracked aura's time on the cooldown when Blizzard left the spell
+-- cooldown there. Callers guard with cdmInternalWrite.
+local function WriteLinkedAuraTime(frame, cd)
+    if IsBlizzardAuraDisplay(frame) then return end
+    local iid, unit = frame.auraInstanceID, frame.auraDataUnit
+    if iid == nil or unit == nil then return end
+    if GetAuraDuration then
+        local ok, dur = pcall(GetAuraDuration, unit, iid)
+        if ok and dur then
+            cd:SetCooldownFromDurationObject(dur)
+            cd:SetUseAuraDisplayTime(true)
+            return
+        end
+    end
+    if GetAuraDataByAuraInstanceID then
+        local ok, data = pcall(GetAuraDataByAuraInstanceID, unit, iid)
+        if ok and data and not IsSecretValue(data) then
+            local duration, expiration = data.duration, data.expirationTime
+            if not IsSecretValue(duration) and not IsSecretValue(expiration)
+                and duration and expiration and duration > 0 then
+                cd:SetCooldown(expiration - duration, duration)
+                cd:SetUseAuraDisplayTime(true)
+            end
+        end
+    end
+end
+
 local VIEWERS = CDM_C.VIEWERS
 local VIEWERS_WITH_OVERRIDE = CDM_C.VIEWERS_WITH_OVERRIDE
 local Pixel = CDM.Pixel
@@ -410,7 +461,7 @@ end
 
 -- "Default" overlays use Blizzard's gold swipe while the aura is up.
 local function ApplyOverlaySwipeStyle(frame, cd, entry)
-    if entry.auraDefaultStyle and frame.cooldownUseAuraDisplayTime == true then
+    if entry.auraDefaultStyle and IsAuraDisplayActive(frame) then
         local ac = CDM_C.AURA_SWIPE_COLOR
         cd:SetSwipeColor(ac.r, ac.g, ac.b, ac.a)
         cd:SetDrawEdge(false)
@@ -422,10 +473,12 @@ end
 local function ApplyAuraOverlayActive(frame, frameData, entry)
     frame.Cooldown:SetReverse(not entry.auraDefaultStyle)
     frame.Cooldown:SetAlpha(1)
-    ApplyOverlaySwipeStyle(frame, frame.Cooldown, entry)
     frameData.cdmInternalWrite = true
+    WriteLinkedAuraTime(frame, frame.Cooldown)
     frame.Cooldown:SetUseAuraDisplayTime(true)
+    frame.Cooldown:SetDrawSwipe(true)
     frameData.cdmInternalWrite = false
+    ApplyOverlaySwipeStyle(frame, frame.Cooldown, entry)
     if frame.Icon then
         frame.Icon:SetDesaturation(0)
     end
@@ -443,6 +496,9 @@ local function ApplyAuraOverlayActive(frame, frameData, entry)
 end
 
 local function ApplyAuraOverlayInactive(frame, frameData)
+    frameData.cdmInternalWrite = true
+    frame.Cooldown:SetUseAuraDisplayTime(false)
+    frameData.cdmInternalWrite = false
     frame.Cooldown:SetDrawSwipe(false)
     if frame.Icon then
         frame.Icon:SetDesaturation(1)
@@ -460,6 +516,9 @@ local function ClearAuraOverlay(frame, frameData)
     if frameData.cdmAuraOverrideActive then
         frame.Cooldown:SetAlpha(1)
         frame.Cooldown:SetReverse(false)
+        frameData.cdmInternalWrite = true
+        frame.Cooldown:SetUseAuraDisplayTime(false)
+        frameData.cdmInternalWrite = false
         ApplySwipeStyle(frame.Cooldown)
         if frame.Icon then
             frame.Icon:SetDesaturation(0)
@@ -522,9 +581,9 @@ local function GetStateGlowDecision(frame, frameData, entry, spellID, cdInfo)
     if state == "always" then
         return true, true
     elseif state == "active" then
-        return true, frame.cooldownUseAuraDisplayTime == true
+        return true, IsAuraDisplayActive(frame)
     elseif state == "inactive" then
-        return true, frame.cooldownUseAuraDisplayTime ~= true
+        return true, not IsAuraDisplayActive(frame)
     end
 
     if not spellID then
@@ -600,7 +659,7 @@ function CDM:ApplyAuraOverride(frame, cachedEntry)
     end
 
     local entry = cachedEntry or FindAuraOverlayEntry(frame)
-    local auraActive = frame.cooldownUseAuraDisplayTime == true
+    local auraActive = IsAuraDisplayActive(frame)
     frameData.cdmLastAuraActive = auraActive
 
     local cdInfo
@@ -1186,7 +1245,7 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
 
                     local entry = FindAuraOverlayEntry(frame)
                     if not entry
-                       and not frame.cooldownUseAuraDisplayTime
+                       and not IsBlizzardAuraDisplay(frame)
                        and not fd.cdmAuraOverrideActive
                        and not fd.cdmStateGlowActive then
                         return
@@ -1196,7 +1255,7 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
                     local cdInfo
 
                     if entry then
-                        local auraActive = frame.cooldownUseAuraDisplayTime == true
+                        local auraActive = IsAuraDisplayActive(frame)
                         if auraActive ~= fd.cdmLastAuraActive then
                             fd.cdmLastAuraActive = auraActive
                             CDM:ApplyAuraOverride(frame)
@@ -1242,7 +1301,7 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
                     if fd.cdmResourceTintWrite then return end
 
                     -- Aura-override frames manage their own visuals.
-                    if fd.cdmAuraOverrideActive or frame.cooldownUseAuraDisplayTime then
+                    if fd.cdmAuraOverrideActive or IsBlizzardAuraDisplay(frame) then
                         return
                     end
                     if FindAuraOverlayEntry(frame) then return end
@@ -1284,13 +1343,40 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
             if cd and not frameData.cdmCooldownHooked then
                 frameData.cdmCooldownHooked = true
 
+                -- Blizzard rewrites the spell cooldown on every refresh; while the
+                -- linked aura is up, put the aura time back on overlay icons.
+                local function ReapplyOverlay(self, fd, entry)
+                    local auraActive = IsAuraDisplayActive(frame)
+                    if auraActive ~= fd.cdmLastAuraActive then
+                        CDM:ApplyAuraOverride(frame, entry)
+                    elseif auraActive then
+                        fd.cdmInternalWrite = true
+                        WriteLinkedAuraTime(frame, self)
+                        fd.cdmInternalWrite = false
+                        ApplyOverlaySwipeStyle(frame, self, entry)
+                    else
+                        ApplySwipeStyle(self)
+                    end
+                end
+
+                if cd.SetCooldownFromDurationObject then
+                    hooksecurefunc(cd, "SetCooldownFromDurationObject", function(self)
+                        local fd = GetFrameData(frame)
+                        if fd.cdmInternalWrite then return end
+                        local entry = FindAuraOverlayEntry(frame)
+                        if entry and entry.auraOverlay then
+                            ReapplyOverlay(self, fd, entry)
+                        end
+                    end)
+                end
+
                 hooksecurefunc(cd, "SetCooldown", function(self)
                     local fd = GetFrameData(frame)
                     if fd.cdmInternalWrite then return end
 
                     local entry = FindAuraOverlayEntry(frame)
                     if entry and entry.auraOverlay then
-                        ApplyOverlaySwipeStyle(frame, self, entry)
+                        ReapplyOverlay(self, fd, entry)
                         return
                     end
 
@@ -1312,7 +1398,7 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
                         end
                         self:SetDrawSwipe(not styleCache.chargeHideSwipe)
                     else
-                        local needsAuraOverride = frame.cooldownUseAuraDisplayTime == true
+                        local needsAuraOverride = IsBlizzardAuraDisplay(frame)
                         local needsGCDOverride = false
                         if not needsAuraOverride and styleCache.hideGCDSwipe then
                             local cdInfo = GetSpellCooldown(sid)
