@@ -1058,6 +1058,8 @@ local function CreateResourcesTab(page, tabId)
     elseif CDM.CLASS_BARS and CDM.CLASS_BARS.General and CDM.CLASS_BARS.General[1] then
         SelectBar("General", CDM.CLASS_BARS.General[1])
     end
+
+    ns.SelectResourceBar = SelectBar
 end
 
 API:RegisterConfigTab("resources", L["Resources"], CreateResourcesTab, 10)

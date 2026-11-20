@@ -18,12 +18,6 @@ local CAST_STATE_NORMAL = 1
 local CAST_STATE_CHANNEL = 2
 local CAST_STATE_NONBREAKABLE = 3
 
-local ARCANE_MISSILES_SPELL_ID = 5143
-local ARCANE_MISSILES_BASE_DURATION = 2.5
-local ARCANE_MISSILES_BASE_MISSILE_COUNT = 7
-local ARCANE_MISSILES_4P_MISSILE_COUNT = 8
-local ARCANE_MISSILES_TICK_EPSILON = 0.01
-
 local GetTime = _G.GetTime
 local UnitClass = _G.UnitClass
 local UnitCastingDuration = _G.UnitCastingDuration
@@ -40,6 +34,9 @@ local _empUseAtlas
 local _empLsmTexturePath
 local _empBarWidth
 local _empBarHeight
+
+local Ticks = CDM.CastBarTicks
+local MassDisintegrate = CDM.MassDisintegrate
 
 local DEFAULT_BORDER_COLOR = { r = 1, g = 1, b = 1, a = 1 }
 local DEFAULT_BG_COLOR = { r = 0.15, g = 0.15, b = 0.15, a = 0.8 }
@@ -425,224 +422,9 @@ end
 
 local ShowPreview, HidePreview, ApplyBarTexture, OnUpdate
 
-local function CreateArcaneMissilesTick(frame)
-    local tick = frame.castBar:CreateTexture(nil, "OVERLAY", nil, 7)
-    tick:SetColorTexture(1, 1, 1, 1)
-    tick:Hide()
-    return tick
-end
-
-local function HideArcaneMissilesTicks(frame)
-    if not frame.arcaneMissilesTicks then return end
-    for _, tick in ipairs(frame.arcaneMissilesTicks) do
-        tick:Hide()
-    end
-end
-
-local function AddArcaneMissilesTickTime(schedule, tickTime, duration)
-    if tickTime < 0 or tickTime > duration + ARCANE_MISSILES_TICK_EPSILON then return end
-    for _, existing in ipairs(schedule) do
-        if math.abs(existing - tickTime) < ARCANE_MISSILES_TICK_EPSILON then return end
-    end
-    schedule[#schedule + 1] = math.min(tickTime, duration)
-end
-
-local function GetArcaneMissilesMissileCount()
-    if CfgVal("castBarArcaneMissiles4Piece", false) == true then
-        return ARCANE_MISSILES_4P_MISSILE_COUNT
-    end
-    return ARCANE_MISSILES_BASE_MISSILE_COUNT
-end
-
-local function BuildArcaneMissilesSchedule(frame, duration, interval, firstTick)
-    local schedule = {}
-    if duration <= 0 or interval <= 0 then
-        frame.arcaneMissilesPrevTicks = schedule
-        return schedule
-    end
-
-    local tickTime = firstTick
-    if not tickTime or tickTime <= 0 then
-        tickTime = interval
-    end
-    while tickTime <= duration + ARCANE_MISSILES_TICK_EPSILON do
-        AddArcaneMissilesTickTime(schedule, tickTime, duration)
-        tickTime = tickTime + interval
-    end
-
-    table.sort(schedule)
-    frame.arcaneMissilesPrevTicks = schedule
-    return schedule
-end
-
-local StopArcaneMissilesTracking
-
-local function UpdateArcaneMissilesTicks(frame)
-    HideArcaneMissilesTicks(frame)
-    if not frame.arcaneMissilesActive
-        or frame.isPreview
-        or CfgVal("castBarShowArcaneMissilesTicks", false) ~= true then return end
-
-    local name, _, _, startTimeMS, endTimeMS, _, _, spellID = UnitChannelInfo("player")
-    if not name or spellID ~= ARCANE_MISSILES_SPELL_ID or not startTimeMS or not endTimeMS then
-        StopArcaneMissilesTracking(frame)
-        return
-    end
-
-    local duration = endTimeMS / 1000 - startTimeMS / 1000
-    if duration <= 0 then return end
-    frame.arcaneMissilesDuration = duration
-
-    local schedule = frame.arcaneMissilesPrevTicks or {}
-    local width = frame.castBar:GetWidth()
-    local height = frame.castBar:GetHeight()
-    if not width or width <= 0 or not height or height <= 0 then return end
-    local pixelsPerSecond = width / duration
-    local visibleCount = 0
-    local lastVisibleIndex
-
-    for i = #schedule, 1, -1 do
-        if schedule[i] < duration * 0.99 then
-            lastVisibleIndex = i
-            break
-        end
-    end
-
-    for i, tickTime in ipairs(schedule) do
-        if tickTime < duration * 0.99 then
-            visibleCount = visibleCount + 1
-            local tick = frame.arcaneMissilesTicks[visibleCount]
-            if not tick then
-                tick = CreateArcaneMissilesTick(frame)
-                frame.arcaneMissilesTicks[visibleCount] = tick
-            end
-            tick:SetSize(2, height * 0.95)
-            tick:ClearAllPoints()
-            tick:SetPoint("CENTER", frame.castBar, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
-            if i == lastVisibleIndex then
-                tick:SetColorTexture(1, 0, 0, 1)
-            else
-                tick:SetColorTexture(1, 1, 1, 1)
-            end
-            tick:Show()
-        end
-    end
-
-    for i = visibleCount + 1, #frame.arcaneMissilesTicks do
-        frame.arcaneMissilesTicks[i]:Hide()
-    end
-end
-
-StopArcaneMissilesTracking = function(frame, preserveSchedule)
-    HideArcaneMissilesTicks(frame)
-    if preserveSchedule then return end
-    frame.arcaneMissilesActive = false
-    frame.arcaneMissilesLastStart = nil
-    frame.arcaneMissilesFirstTick = 0
-    frame.arcaneMissilesPrevStart = nil
-    frame.arcaneMissilesPrevTicks = nil
-    frame.arcaneMissilesPrevInterval = nil
-    frame.arcaneMissilesPrevMissileCount = nil
-    frame.arcaneMissilesDuration = nil
-end
-
-local function StartArcaneMissilesTracking(frame)
-    if frame.isPreview or CfgVal("castBarShowArcaneMissilesTicks", false) ~= true then
-        StopArcaneMissilesTracking(frame)
-        return
-    end
-
-    local name, _, _, startTimeMS, endTimeMS, _, _, spellID = UnitChannelInfo("player")
-    if not name or spellID ~= ARCANE_MISSILES_SPELL_ID or not startTimeMS or not endTimeMS then
-        StopArcaneMissilesTracking(frame)
-        return
-    end
-
-    local startTime = startTimeMS / 1000
-    if frame.arcaneMissilesLastStart
-        and math.abs(startTime - frame.arcaneMissilesLastStart) < 0.001 then
-        UpdateArcaneMissilesTicks(frame)
-        return
-    end
-
-    local duration = endTimeMS / 1000 - startTime
-    if duration <= 0 then
-        StopArcaneMissilesTracking(frame)
-        return
-    end
-
-    local missileCount = GetArcaneMissilesMissileCount()
-    local intervalCount = missileCount - 1
-    local baseTickInterval = ARCANE_MISSILES_BASE_DURATION / intervalCount
-    local interval = baseTickInterval / (ARCANE_MISSILES_BASE_DURATION / duration)
-    local firstTick = interval
-    if frame.arcaneMissilesActive
-        and frame.arcaneMissilesPrevStart
-        and frame.arcaneMissilesPrevTicks
-        and frame.arcaneMissilesPrevInterval
-        and frame.arcaneMissilesPrevMissileCount == missileCount then
-        local now = GetTime()
-        for _, previousTick in ipairs(frame.arcaneMissilesPrevTicks) do
-            local absoluteTick = frame.arcaneMissilesPrevStart + previousTick
-            if absoluteTick > now then
-                firstTick = absoluteTick - startTime
-                if firstTick < 0 and firstTick > -ARCANE_MISSILES_TICK_EPSILON then
-                    firstTick = 0
-                end
-                interval = frame.arcaneMissilesPrevInterval
-                break
-            end
-        end
-    end
-
-    frame.arcaneMissilesActive = true
-    frame.arcaneMissilesLastStart = startTime
-    frame.arcaneMissilesFirstTick = firstTick
-    frame.arcaneMissilesPrevStart = startTime
-    frame.arcaneMissilesPrevInterval = interval
-    frame.arcaneMissilesPrevMissileCount = missileCount
-    frame.arcaneMissilesDuration = duration
-    BuildArcaneMissilesSchedule(frame, duration, interval, firstTick)
-    UpdateArcaneMissilesTicks(frame)
-end
-
-local function RefreshArcaneMissilesTracking(frame)
-    if frame.isPreview or CfgVal("castBarShowArcaneMissilesTicks", false) ~= true then
-        HideArcaneMissilesTicks(frame)
-        return
-    end
-
-    local name, _, _, startTimeMS, endTimeMS, _, _, spellID = UnitChannelInfo("player")
-    if not name or spellID ~= ARCANE_MISSILES_SPELL_ID or not startTimeMS or not endTimeMS then
-        StopArcaneMissilesTracking(frame)
-        return
-    end
-
-    if not frame.arcaneMissilesActive then
-        StartArcaneMissilesTracking(frame)
-        return
-    end
-
-    local duration = endTimeMS / 1000 - startTimeMS / 1000
-    local missileCount = GetArcaneMissilesMissileCount()
-    local intervalCount = missileCount - 1
-    if frame.arcaneMissilesPrevMissileCount ~= missileCount then
-        frame.arcaneMissilesFirstTick = duration / intervalCount
-        frame.arcaneMissilesPrevInterval = duration / intervalCount
-        frame.arcaneMissilesPrevMissileCount = missileCount
-    end
-    frame.arcaneMissilesDuration = duration
-    BuildArcaneMissilesSchedule(
-        frame,
-        duration,
-        frame.arcaneMissilesPrevInterval or (duration / intervalCount),
-        frame.arcaneMissilesFirstTick
-    )
-    UpdateArcaneMissilesTicks(frame)
-end
-
 local function FadeOut(self)
-    HideArcaneMissilesTicks(self)
+    Ticks.Hide(self)
+    MassDisintegrate.Hide(self)
     HideEmpowerSegments(self)
     self:Hide()
     self.isEmpowered = false
@@ -664,7 +446,6 @@ ShowPreview = function(frame)
 
     frame.isPreview = true
     frame.curEndTime = nil
-    StopArcaneMissilesTracking(frame)
 
     frame.barObj:SetMinMaxValues(0, 1)
     frame.barObj:SetValue(0.7)
@@ -697,6 +478,8 @@ ShowPreview = function(frame)
     end
 
     HideEmpowerSegments(frame)
+    Ticks.ShowPreview(frame)
+    MassDisintegrate.ShowPreview(frame)
     frame:SetAlpha(1)
     frame:Show()
     SyncCastBarBorderVisual(frame, frame.borderFrame)
@@ -708,6 +491,8 @@ HidePreview = function(frame)
     frame.casting = false
     frame.channeling = false
     frame.castID = nil
+    Ticks.Hide(frame)
+    MassDisintegrate.Hide(frame)
     frame:Hide()
 end
 
@@ -802,7 +587,6 @@ ApplyBarTexture = function(frame, castState)
 end
 
 local function FinishCast(frame)
-    StopArcaneMissilesTracking(frame)
     frame.casting = false
     frame.channeling = false
     frame.castID = nil
@@ -835,14 +619,14 @@ local function RefreshEmpowerTiming(frame)
 end
 
 local function RefreshBarData(frame)
-    local name, text, texture, startTime, endTime, notInterruptible, castID
+    local name, text, texture, startTime, endTime, notInterruptible, castID, spellID
     local isChannel, isEmpowered, numStages
 
     name, text, texture, startTime, endTime, _, _, notInterruptible, _, castID = UnitCastingInfo("player")
     if name then
         isChannel = false
     else
-        name, text, texture, startTime, endTime, _, notInterruptible, _, isEmpowered, numStages, castID = UnitChannelInfo("player")
+        name, text, texture, startTime, endTime, _, notInterruptible, spellID, isEmpowered, numStages, castID = UnitChannelInfo("player")
         if name then
             isChannel = true
         end
@@ -951,6 +735,12 @@ local function RefreshBarData(frame)
 
     if frame.isEmpowered then
         UpdateEmpowerFill(frame)
+    end
+
+    if frame.isReverse then
+        Ticks.Update(frame, spellID, frame.curStartTime, frame.curEndTime, castID)
+    else
+        Ticks.Hide(frame)
     end
 end
 
@@ -1073,7 +863,8 @@ local function UpdateCastBarFromConfig(frame)
     SyncCastBarBorderVisual(frame, frame.borderFrame)
 
     ApplyCastBarIconLayout(frame)
-    RefreshArcaneMissilesTracking(frame)
+    Ticks.Refresh(frame)
+    MassDisintegrate.Refresh(frame)
 end
 
 local function UpdateContainerPosition()
@@ -1154,8 +945,8 @@ local function DisableCastBar(frame)
     frame.channeling = false
     frame.isEmpowered = false
     frame.castID = nil
-    StopArcaneMissilesTracking(frame)
     HideEmpowerSegments(frame)
+    Ticks.Reset(frame)
     frame.cdmEnabled = false
 
     if CDM.castBarContainer then
@@ -1233,16 +1024,7 @@ function CDM:CreatePlayerCastBar()
     f.castBar:SetStatusBarTexture(ATLAS_CAST)
     f.castBar:SetFrameLevel(11)
     f.barObj = f.castBar
-
-    f.arcaneMissilesTicks = {}
-    f.arcaneMissilesActive = false
-    f.arcaneMissilesLastStart = nil
-    f.arcaneMissilesFirstTick = 0
-    f.arcaneMissilesPrevStart = nil
-    f.arcaneMissilesPrevTicks = nil
-    f.arcaneMissilesPrevInterval = nil
-    f.arcaneMissilesPrevMissileCount = nil
-    f.arcaneMissilesDuration = nil
+    Ticks.Attach(f)
 
     f.stageFrame = CreateFrame("Frame", nil, f)
     f.stageFrame:SetAllPoints()
@@ -1251,6 +1033,7 @@ function CDM:CreatePlayerCastBar()
     f.topOverlay = CreateFrame("Frame", nil, f)
     f.topOverlay:SetAllPoints()
     f.topOverlay:SetFrameLevel(15)
+    MassDisintegrate.Attach(f)
 
     f.spellName = f.topOverlay:CreateFontString(nil, "OVERLAY")
     f.spellName:SetIgnoreParentScale(true)
@@ -1289,26 +1072,11 @@ function CDM:CreatePlayerCastBar()
             or event == "UNIT_SPELLCAST_CHANNEL_START"
             or event == "UNIT_SPELLCAST_EMPOWER_START" then
             RefreshBarData(frame)
-            if event == "UNIT_SPELLCAST_CHANNEL_START" and b == ARCANE_MISSILES_SPELL_ID then
-                StartArcaneMissilesTracking(frame)
-            else
-                StopArcaneMissilesTracking(frame)
-            end
 
         elseif event == "UNIT_SPELLCAST_STOP"
             or event == "UNIT_SPELLCAST_CHANNEL_STOP"
             or event == "UNIT_SPELLCAST_EMPOWER_STOP" then
-            if event == "UNIT_SPELLCAST_CHANNEL_STOP"
-                and b == ARCANE_MISSILES_SPELL_ID
-                and frame.arcaneMissilesActive then
-                StopArcaneMissilesTracking(frame, true)
-                frame.casting = false
-                frame.channeling = false
-                frame.castID = nil
-                FadeOut(frame)
-            else
-                FinishCast(frame)
-            end
+            FinishCast(frame)
 
         elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
             -- (unit, castGUID, spellID, interruptedBy, castBarID) -> d = castBarID
@@ -1317,7 +1085,6 @@ function CDM:CreatePlayerCastBar()
 
         elseif event == "UNIT_SPELLCAST_DELAYED" then
             RefreshBarData(frame)
-            StopArcaneMissilesTracking(frame)
 
         elseif event == "UNIT_SPELLCAST_CHANNEL_UPDATE"
             or event == "UNIT_SPELLCAST_EMPOWER_UPDATE" then
@@ -1326,11 +1093,6 @@ function CDM:CreatePlayerCastBar()
                 UpdateEmpowerFill(frame)
             else
                 RefreshBarData(frame)
-                if event == "UNIT_SPELLCAST_CHANNEL_UPDATE" and b == ARCANE_MISSILES_SPELL_ID then
-                    RefreshArcaneMissilesTracking(frame)
-                else
-                    StopArcaneMissilesTracking(frame)
-                end
             end
 
         elseif event == "UNIT_SPELLCAST_INTERRUPTIBLE"

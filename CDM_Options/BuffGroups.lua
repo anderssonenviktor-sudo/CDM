@@ -2359,6 +2359,16 @@ local function CreateBuffGroupsPanel(page)
         if page:IsShown() then BuildIconGrid() end
     end)
 
+    -- A hidden panel picks up the selection from its OnShow handler.
+    function ns.SelectBuffGroup(groupIndex)
+        selectedGroupIndex = groupIndex
+        selectedSpellID = nil
+        selectedSpellGroupIndex = nil
+        if not page:IsShown() then return end
+        RefreshCurrentSpecID()
+        ShowGroupSettings(groupIndex)
+        RefreshLeftPanelIfNeeded()
+    end
 end
 
 local function CreateBuffGroupsTab(page)
@@ -2367,6 +2377,7 @@ local function CreateBuffGroupsTab(page)
         { id = "general", label = L["General"] },
         { id = "text", label = L["Text"] },
     }, "buffs", 100, true)
+    ns.SelectBuffSubTab = tabBar.selectTab
     CreateBuffGroupsPanel(tabBar.subPages.buffs)
     ns._CreateBuffTextPanel(tabBar.subPages.text, page)
 

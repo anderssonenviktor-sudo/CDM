@@ -1462,6 +1462,17 @@ local function CreateBarsTab(page)
         RefreshAll()
         RefreshSelection()
     end)
+
+    function ns.SelectBuffBarGroup(groupIndex)
+        if page:IsShown() then
+            SelectGroup(groupIndex)
+            return
+        end
+        -- OnShow applies this unless the spec or profile changed.
+        browserGroupIndex = groupIndex
+        selectedGroupIndex = groupIndex
+        selectedBar, selectedBarGroupIndex = nil, nil
+    end
 end
 
 API:RegisterConfigTab("bars", L["Bars"], CreateBarsTab, 8)

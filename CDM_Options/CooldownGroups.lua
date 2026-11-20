@@ -2501,6 +2501,17 @@ local function CreateCooldownGroupsPanel(subPage, page)
         QueueLeftPanelRefresh()
 
     end, 30, { "CD_DATA" })
+
+    -- A hidden panel picks up the selection from its OnShow handler.
+    function ns.SelectCooldownGroup(groupIndex)
+        selectedGroupIndex = groupIndex
+        selectedSpellID = nil
+        selectedSpellGroupIndex = nil
+        if not subPage:IsShown() then return end
+        RefreshCurrentSpecID()
+        ShowGroupSettings(groupIndex)
+        RefreshLeftPanelIfNeeded()
+    end
 end
 
 ns._CreateCooldownGroupsPanel = CreateCooldownGroupsPanel

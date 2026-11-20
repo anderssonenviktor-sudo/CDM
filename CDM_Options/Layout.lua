@@ -16,6 +16,7 @@ local function CreateLayoutTab(page, tabId)
     }, "cooldowns", 100, true)
 
     local subPages = tabBar.subPages
+    ns.SelectLayoutSubTab = tabBar.selectTab
 
     if ns._CreateCooldownGroupsPanel then
         ns._CreateCooldownGroupsPanel(subPages.cooldowns, page)
@@ -29,6 +30,8 @@ local function CreateLayoutTab(page, tabId)
     local scrollChild = scrollFrame:GetScrollChild()
 
     local sections = {}
+    local sectionKeys = {}
+    local sectionUpdaters = {}
 
     local function UpdateScrollHeight()
         local height = 40
@@ -86,6 +89,8 @@ local function CreateLayoutTab(page, tabId)
             UpdateSection()
         end)
         sections[#sections + 1] = section
+        sectionKeys[#sections] = key
+        sectionUpdaters[key] = UpdateSection
         UpdateSection()
         return section, body
     end
@@ -253,6 +258,23 @@ local function CreateLayoutTab(page, tabId)
 
     UpdateUnlockControls()
     generalPage:HookScript("OnShow", UpdateScrollHeight)
+
+    function ns.ShowLayoutGeneralSection(key)
+        local update = sectionUpdaters[key]
+        if not update then return end
+        tabBar.selectTab("general")
+        generalExpanded[key] = true
+        update()
+        local offset = 0
+        for i, section in ipairs(sections) do
+            if sectionKeys[i] == key then break end
+            offset = offset + section:GetHeight() + 14
+        end
+        -- The scroll range catches up with the new content height on the next frame.
+        C_Timer.After(0, function()
+            scrollFrame:SetVerticalScroll(math.min(offset, scrollFrame:GetVerticalScrollRange()))
+        end)
+    end
 end
 
 API:RegisterConfigTab("layout", L["Cooldowns"], CreateLayoutTab, 2)

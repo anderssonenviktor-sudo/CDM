@@ -13,6 +13,8 @@
     <Script file="CooldownGroups.lua"/>
     <Script file="SpellOverrides.lua"/>
     <Script file="BuffReplacement.lua"/>
+    <Script file="CastBarTicks.lua"/>
+    <Script file="MassDisintegrate.lua"/>
     <Script file="PlayerCastBar.lua"/>
     <Script file="PressOverlay.lua"/>
     <Script file="BuffBarModel.lua"/>

@@ -413,7 +413,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 46
+local DB_SCHEMA_VERSION = 47
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1633,6 +1633,14 @@ local PROFILE_MIGRATIONS = {
             if type(profile.spacing) == "number" and profile.buffSpacing == nil then
                 profile.buffSpacing = profile.spacing
             end
+        end,
+    },
+    {
+        -- The Arcane Missiles-only cast bar ticks were removed ahead of a general tick system.
+        version = 47,
+        run = function(profile)
+            profile.castBarShowArcaneMissilesTicks = nil
+            profile.castBarArcaneMissiles4Piece = nil
         end,
     },
 }

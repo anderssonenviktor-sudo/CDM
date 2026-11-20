@@ -175,7 +175,8 @@ local function CreateCastBarTab(page, tabId)
         page.UpdateAutoWidthLayout()
     end)
 
-    local _, iconContent = CollapsibleSection("icon", L["Spell Icon"], 160)
+    local ICON_SECTION_HEIGHT = 290
+    local iconSection, iconContent = CollapsibleSection("icon", L["Icon/Ticks"], ICON_SECTION_HEIGHT)
 
     local showIcon = CDM.db.castBarShowIcon or false
     page.controls.castBarShowIcon = UI.CreateModernCheckbox(
@@ -225,6 +226,148 @@ local function CreateCastBarTab(page, tabId)
         end
     )
     page.controls.castBarIconGapSlider:SetPoint("TOPLEFT", ddIconPos, "BOTTOMLEFT", 0, -10)
+
+    page.controls.castBarShowTicks = UI.CreateModernCheckbox(
+        iconContent,
+        L["Show Channel Ticks"],
+        CDM.db.castBarShowTicks ~= false,
+        function(checked)
+            CDM.db.castBarShowTicks = checked
+            API:Refresh("STYLE")
+        end
+    )
+    page.controls.castBarShowTicks:SetPoint("TOPLEFT", page.controls.castBarIconGapSlider, "BOTTOMLEFT", 0, -10)
+
+    page.controls.castBarHighlightLastTick = UI.CreateModernCheckbox(
+        iconContent,
+        L["Highlight Last Tick"],
+        CDM.db.castBarHighlightLastTick == true,
+        function(checked)
+            CDM.db.castBarHighlightLastTick = checked
+            API:Refresh("STYLE")
+        end
+    )
+    page.controls.castBarHighlightLastTick:SetPoint("TOPLEFT", page.controls.castBarShowTicks, "BOTTOMLEFT", 0, -10)
+
+    -- Each color sits on its toggle's row, in one column.
+    page.controls.castBarTickColor = UI.CreateColorSwatch(iconContent, "", "castBarTickColor", "STYLE")
+    page.controls.castBarTickColor:SetPoint("LEFT", page.controls.castBarShowTicks, "LEFT", 190, 0)
+
+    page.controls.castBarLastTickColor = UI.CreateColorSwatch(iconContent, "", "castBarLastTickColor", "STYLE")
+    page.controls.castBarLastTickColor:SetPoint("LEFT", page.controls.castBarHighlightLastTick, "LEFT", 190, 0)
+
+    page.controls.castBarTickWidthSlider = UI.CreateModernSlider(
+        iconContent,
+        L["Tick Width"],
+        1, 6,
+        CDM.db.castBarTickWidth or 2,
+        function(v)
+            CDM.db.castBarTickWidth = UI.RoundToInt(v)
+            API:Refresh("STYLE")
+        end
+    )
+
+    -- Devastation only: the spec that can talent into Mass Disintegrate.
+    local DEVASTATION_SPEC_ID = 1467
+    if CDM.GetCurrentSpecID and CDM:GetCurrentSpecID() == DEVASTATION_SPEC_ID then
+        local MASS_SETTINGS_HEIGHT = 190
+        local massSettings = CreateFrame("Frame", nil, iconContent)
+        massSettings:SetSize(500, MASS_SETTINGS_HEIGHT)
+
+        local function UpdateMassLayout()
+            local warningOn = CDM.db.castBarMassDisintegrateWarning == true
+            massSettings:SetShown(warningOn)
+            local slider = page.controls.castBarTickWidthSlider
+            slider:ClearAllPoints()
+            if warningOn then
+                slider:SetPoint("TOPLEFT", massSettings, "BOTTOMLEFT", -20, -20)
+            else
+                slider:SetPoint("TOPLEFT", page.controls.castBarMassDisintegrateWarning, "BOTTOMLEFT", 0, -20)
+            end
+            iconSection:SetContentHeight(ICON_SECTION_HEIGHT + 36 + (warningOn and MASS_SETTINGS_HEIGHT + 10 or 0))
+        end
+
+        page.controls.castBarMassDisintegrateWarning = UI.CreateModernCheckbox(
+            iconContent,
+            L["Mass Disintegrate Clip Warning"],
+            CDM.db.castBarMassDisintegrateWarning == true,
+            function(checked)
+                CDM.db.castBarMassDisintegrateWarning = checked
+                UpdateMassLayout()
+                API:Refresh("STYLE")
+            end
+        )
+        page.controls.castBarMassDisintegrateWarning:SetPoint(
+            "TOPLEFT", page.controls.castBarHighlightLastTick, "BOTTOMLEFT", 0, -10)
+        massSettings:SetPoint("TOPLEFT", page.controls.castBarMassDisintegrateWarning, "BOTTOMLEFT", 20, -10)
+
+        local textLabel = massSettings:CreateFontString(nil, "ARTWORK", "CDM_Font14")
+        textLabel:SetText(L["Warning Text"])
+        textLabel:SetPoint("TOPLEFT", 0, -4)
+
+        local textBox = UI.CreateEditBox(massSettings)
+        textBox:SetSize(180, 22)
+        textBox:SetPoint("LEFT", textLabel, "RIGHT", 12, 0)
+        textBox:SetMaxLetters(40)
+        textBox:SetText(CDM.db.castBarClipWarningText or "")
+        textBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+        textBox:SetScript("OnEscapePressed", function(self)
+            self:SetText(CDM.db.castBarClipWarningText or "")
+            self:ClearFocus()
+        end)
+        textBox:SetScript("OnEditFocusLost", function(self)
+            self:HighlightText(0, 0)
+            local text = strtrim(self:GetText() or "")
+            -- An empty box restores the default text.
+            CDM.db.castBarClipWarningText = text ~= "" and text or nil
+            self:SetText(CDM.db.castBarClipWarningText or "")
+            API:Refresh("STYLE")
+        end)
+        page.controls.castBarClipWarningText = textBox
+
+        page.controls.castBarClipWarningFontSize = UI.CreateModernSlider(
+            massSettings,
+            L["Font Size"],
+            8, 40,
+            CDM.db.castBarClipWarningFontSize or 18,
+            function(v)
+                CDM.db.castBarClipWarningFontSize = UI.RoundToInt(v)
+                API:Refresh("STYLE")
+            end
+        )
+        page.controls.castBarClipWarningFontSize:SetPoint("TOPLEFT", textLabel, "BOTTOMLEFT", 0, -25)
+
+        page.controls.castBarClipWarningOffsetX = UI.CreateModernSlider(
+            massSettings,
+            L["X Offset"],
+            -300, 300,
+            CDM.db.castBarClipWarningOffsetX or 0,
+            function(v)
+                CDM.db.castBarClipWarningOffsetX = UI.RoundToInt(v)
+                API:Refresh("STYLE")
+            end
+        )
+        page.controls.castBarClipWarningOffsetX:SetPoint(
+            "TOPLEFT", page.controls.castBarClipWarningFontSize, "BOTTOMLEFT", 0, -10)
+
+        page.controls.castBarClipWarningOffsetY = UI.CreateModernSlider(
+            massSettings,
+            L["Y Offset"],
+            -300, 300,
+            CDM.db.castBarClipWarningOffsetY or 10,
+            function(v)
+                CDM.db.castBarClipWarningOffsetY = UI.RoundToInt(v)
+                API:Refresh("STYLE")
+            end
+        )
+        page.controls.castBarClipWarningOffsetY:SetPoint(
+            "TOPLEFT", page.controls.castBarClipWarningOffsetX, "BOTTOMLEFT", 0, -10)
+
+        UpdateMassLayout()
+    else
+        page.controls.castBarTickWidthSlider:SetPoint(
+            "TOPLEFT", page.controls.castBarHighlightLastTick, "BOTTOMLEFT", 0, -20)
+    end
 
     local textureSection, textureContent = CollapsibleSection("texture", L["Bar Texture"], 75)
 
@@ -466,7 +609,7 @@ local function CreateCastBarTab(page, tabId)
         end)
     end
 
-    local textSection, textContent = CollapsibleSection("text", L["Text"], 410)
+    local _, textContent = CollapsibleSection("text", L["Text"], 410)
 
     page.controls.castBarFontSizeSlider = UI.CreateModernSlider(
         textContent,
@@ -578,40 +721,6 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarTimerOffsetY:SetPoint("TOPLEFT", page.controls.castBarTimerOffsetX, "BOTTOMLEFT", 0, -10)
 
     local _, playerClass = UnitClass("player")
-    if playerClass == "MAGE" then
-        page.controls.castBarShowArcaneMissilesTicks = UI.CreateModernCheckbox(
-            textContent,
-            L["Show Arcane Missiles ticks"],
-            CDM.db.castBarShowArcaneMissilesTicks == true,
-            function(checked)
-                CDM.db.castBarShowArcaneMissilesTicks = checked
-                if page.controls.castBarArcaneMissiles4Piece then
-                    page.controls.castBarArcaneMissiles4Piece:SetShown(checked)
-                end
-                textSection:SetContentHeight(checked and 485 or 450)
-                API:Refresh("STYLE")
-            end
-        )
-        page.controls.castBarShowArcaneMissilesTicks:SetPoint(
-            "TOPLEFT", page.controls.castBarTimerOffsetY, "BOTTOMLEFT", 0, -10
-        )
-
-        page.controls.castBarArcaneMissiles4Piece = UI.CreateModernCheckbox(
-            textContent,
-            L["4p"],
-            CDM.db.castBarArcaneMissiles4Piece == true,
-            function(checked)
-                CDM.db.castBarArcaneMissiles4Piece = checked
-                API:Refresh("STYLE")
-            end
-        )
-        page.controls.castBarArcaneMissiles4Piece:SetPoint(
-            "TOPLEFT", page.controls.castBarShowArcaneMissilesTicks, "BOTTOMLEFT", 20, -10
-        )
-        page.controls.castBarArcaneMissiles4Piece:SetShown(CDM.db.castBarShowArcaneMissilesTicks == true)
-        textSection:SetContentHeight(CDM.db.castBarShowArcaneMissilesTicks == true and 485 or 450)
-    end
-
     local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
     local hasEmpoweredCasts = (playerClass == "EVOKER") or (specID == 250) or (specID == 269)
     if hasEmpoweredCasts then

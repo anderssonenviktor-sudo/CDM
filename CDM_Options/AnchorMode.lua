@@ -782,10 +782,18 @@ local function CreateAnchorBanner()
     banner:SetBackdropColor(PANEL_BG[1], PANEL_BG[2], PANEL_BG[3], PANEL_BG[4])
     banner:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 1)
 
-    local label = banner:CreateFontString(nil, "OVERLAY", "CDM_Font12")
-    label:SetPoint("LEFT", 14, 0)
-    label:SetText(L["Anchor Mode"])
-    label:SetTextColor(GOLD[1], GOLD[2], GOLD[3], 1)
+    local settingsButton = CreateFrame("Button", nil, banner)
+    settingsButton:SetSize(110, 28)
+    settingsButton:SetPoint("LEFT", 5, 0)
+    local settingsText = settingsButton:CreateFontString(nil, "OVERLAY", "CDM_Font12")
+    settingsText:SetPoint("LEFT", 9, 0)
+    settingsText:SetText(L["Go to Settings"])
+    settingsText:SetTextColor(GOLD[1], GOLD[2], GOLD[3], 1)
+    settingsButton:SetScript("OnEnter", function() settingsText:SetTextColor(1, 1, 1, 1) end)
+    settingsButton:SetScript("OnLeave", function() settingsText:SetTextColor(GOLD[1], GOLD[2], GOLD[3], 1) end)
+    settingsButton:SetScript("OnClick", function()
+        AnchorMode:Exit(true, AnchorMode.selectedEntry)
+    end)
 
     local exitButton = CreateFrame("Button", nil, banner)
     exitButton:SetSize(100, 28)
@@ -1242,7 +1250,50 @@ function AnchorMode:Enter(button)
     if button then button:LockHighlight() end
 end
 
-function AnchorMode:Exit(reopenConfig)
+-- Returns the config tab for an anchor entry and an optional function that
+-- selects its sub-tab, group or bar once that tab is built and shown.
+local function GetSettingsTarget(key)
+    local cooldownGroup = tonumber(key:match("^cooldown_group_(%d+)$"))
+    local buffGroup = tonumber(key:match("^buff_group_(%d+)$"))
+    local barGroup = tonumber(key:match("^buff_bar_group_(%d+)$"))
+    local resourceKey = key:match("^resource_(.+)$")
+    if key == "essential" or key == "utility" then
+        return "layout", function()
+            if ns.ShowLayoutGeneralSection then ns.ShowLayoutGeneralSection(key) end
+        end
+    elseif cooldownGroup then
+        return "layout", function()
+            -- Select first so the sub-tab's OnShow renders this group.
+            if ns.SelectCooldownGroup then ns.SelectCooldownGroup(cooldownGroup) end
+            if ns.SelectLayoutSubTab then ns.SelectLayoutSubTab("cooldowns") end
+        end
+    elseif key == "buff" then
+        return "buffgroups", function()
+            if ns.SelectBuffSubTab then ns.SelectBuffSubTab("general") end
+        end
+    elseif buffGroup then
+        return "buffgroups", function()
+            if ns.SelectBuffGroup then ns.SelectBuffGroup(buffGroup) end
+            if ns.SelectBuffSubTab then ns.SelectBuffSubTab("buffs") end
+        end
+    elseif key == "buff_bar" then
+        return "bars"
+    elseif barGroup then
+        return "bars", function()
+            if ns.SelectBuffBarGroup then ns.SelectBuffBarGroup(barGroup) end
+        end
+    elseif key == "cast_bar" then
+        return "castbar"
+    elseif resourceKey then
+        return "resources", function()
+            if ns.SelectResourceBar and ns.GetResourceBarClassKey then
+                ns.SelectResourceBar(ns.GetResourceBarClassKey(resourceKey), resourceKey)
+            end
+        end
+    end
+end
+
+function AnchorMode:Exit(reopenConfig, settingsEntry)
     if not self.active then return end
     if nudgePanel then
         for _, box in ipairs(nudgePanel.boxes) do box:ClearFocus() end
@@ -1276,12 +1327,17 @@ function AnchorMode:Exit(reopenConfig)
         self.openedSettings = nil
     end
     if reopenConfig and not InCombatLockdown() and CDM.API and CDM.API.ShowConfig then
+        local targetTab, openTarget
+        if settingsEntry then
+            targetTab, openTarget = GetSettingsTarget(settingsEntry.key)
+        end
         if self.anchorChanged and CDM.API.RebuildConfigFrame then
             -- Open pages still show the old anchor controls.
-            CDM.API:RebuildConfigFrame(ns.GetCurrentConfigTab and ns.GetCurrentConfigTab())
+            CDM.API:RebuildConfigFrame(targetTab or (ns.GetCurrentConfigTab and ns.GetCurrentConfigTab()))
         else
-            CDM.API:ShowConfig()
+            CDM.API:ShowConfig(targetTab)
         end
+        if openTarget then openTarget() end
     end
     self.anchorChanged = false
 end
