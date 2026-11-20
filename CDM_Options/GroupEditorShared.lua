@@ -1345,6 +1345,8 @@ function Shared.CreateGroupEditorPools(parent, config)
         widget.iconTex:SetTexture(nil)
         widget.iconTex:SetDesaturated(false)
         widget.iconTex:SetAlpha(1)
+        widget.iconTex:SetVertexColor(1, 1, 1)
+        UI.SetBuffBadge(widget.iconContainer, false)
         if widget.iconContainer.border then
             widget.iconContainer.border:SetAlpha(1)
             if resetBorder then

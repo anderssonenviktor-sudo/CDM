@@ -799,7 +799,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     countOffsetX = CDM.db.countOffsetXMain or 0,
                     countOffsetY = CDM.db.countOffsetYMain or 0,
                 },
-                { isStatic = true, forced = true },
+                { isStatic = true, promoted = true },
                 false,
                 {
                     save = SavePromotedBuffSettings,
@@ -1947,8 +1947,10 @@ local function CreateCooldownGroupsPanel(subPage, page)
         CDM_C.ApplyIconTexCoord(widget.iconTex, CDM_C.GetEffectiveZoomAmount())
 
         local cfgColor = CDM_C.GetConfigValue("borderColor", { r = 0, g = 0, b = 0, a = 1 })
+        local isPromotedBuff = IsCooldownBuffTracked(currentSpecID, spellID)
+        UI.SetBuffBadge(widget.iconContainer, isPromotedBuff)
         if widget.iconContainer.border then
-            local promotedColor = IsCooldownBuffTracked(currentSpecID, spellID)
+            local promotedColor = isPromotedBuff
                 and CDM.GetSpellBorderColor and CDM:GetSpellBorderColor(currentSpecID, spellID)
             local color = promotedColor or cfgColor
             widget.iconContainer.border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
@@ -2098,8 +2100,10 @@ local function CreateCooldownGroupsPanel(subPage, page)
             frame.icon:SetDesaturated(false)
             frame.icon:SetAlpha(1)
 
+            local isPromotedBuff = IsCooldownBuffTracked(currentSpecID, spellID)
+            UI.SetBuffBadge(frame, isPromotedBuff)
             if frame.border then
-                local promotedColor = IsCooldownBuffTracked(currentSpecID, spellID)
+                local promotedColor = isPromotedBuff
                     and CDM.GetSpellBorderColor and CDM:GetSpellBorderColor(currentSpecID, spellID)
                 local color = promotedColor or cfgColor
                 frame.border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
@@ -2119,6 +2123,10 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     end
                 else
                     GameTooltip:SetSpellByID(spellID)
+                end
+                if isPromotedBuff then
+                    local c = UI.TextColors.success
+                    GameTooltip:AddLine(L["Imported buff"], c.r, c.g, c.b)
                 end
                 GameTooltip:Show()
             end)

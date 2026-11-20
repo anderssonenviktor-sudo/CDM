@@ -988,6 +988,40 @@ function UI.SetTextError(fontString)
     UI.SetTextColor(fontString, UI.TextColors.error)
 end
 
+-- Corner "B" tab marking a buff that was imported into the cooldown rows.
+-- Created lazily on the icon host and never takes mouse input.
+function UI.SetBuffBadge(host, shown)
+    local badge = host.cdmBuffBadge
+    if not shown then
+        if badge then badge:Hide() end
+        return
+    end
+    if not badge then
+        badge = CreateFrame("Frame", nil, host)
+        badge:SetFrameLevel(host:GetFrameLevel() + 5)
+        local bg = badge:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0, 0, 0, 0.85)
+        local text = badge:CreateFontString(nil, "OVERLAY", "CDM_Font12")
+        text:SetPoint("CENTER", 1, 0)
+        local color = UI.TextColors.success
+        text:SetTextColor(color.r, color.g, color.b, 1)
+        badge.text = text
+        host.cdmBuffBadge = badge
+    end
+    local size = math.max(10, math.floor((host:GetHeight() or 30) * 0.4 + 0.5))
+    if badge.cdmSize ~= size then
+        badge.cdmSize = size
+        badge:SetSize(size, size)
+        local fontPath = _G["CDM_Font12"]:GetFont()
+        badge.text:SetFont(fontPath, math.max(8, size - 2), "OUTLINE")
+        badge.text:SetText("B")
+    end
+    badge:ClearAllPoints()
+    badge:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+    badge:Show()
+end
+
 function UI.CloseAllDropdownMenus()
     if Menu and Menu.GetManager then
         Menu.GetManager():CloseMenus()

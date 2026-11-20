@@ -305,6 +305,21 @@ local function CreateBuffGroupsPanel(page)
     local gridIcons = {}
     local gridIconsActive = 0
 
+    local function IsImportedIntoCooldowns(spellID)
+        local bySpec = CDM.db and CDM.db.cooldownBuffs
+        local selected = bySpec and currentSpecID and bySpec[currentSpecID]
+        return type(selected) == "table" and selected[spellID] == true
+    end
+
+    -- Red tint marks buffs that display in the cooldown rows instead of here.
+    local function ApplyImportedTint(tex, imported)
+        if imported then
+            tex:SetVertexColor(1, 0.35, 0.35)
+        else
+            tex:SetVertexColor(1, 1, 1)
+        end
+    end
+
     local function AcquireGridIcon()
         gridIconsActive = gridIconsActive + 1
         local frame = gridIcons[gridIconsActive]
@@ -935,25 +950,32 @@ local function CreateBuffGroupsPanel(page)
         end
 
         if placeholderOpts and not isCustomBuff then
-            local placeholderChecked = placeholderOpts.forced or (existingOv and existingOv.placeholder) or false
-            local placeholderCheckbox
-            placeholderCheckbox = UI.CreateModernCheckbox(
+            -- Promoted (cooldown-row) buffs default to showing a placeholder, so
+            -- they store the opt-out instead of the opt-in.
+            local promoted = placeholderOpts.promoted
+            local placeholderChecked
+            if promoted then
+                placeholderChecked = not (existingOv and existingOv.hidePlaceholder)
+            else
+                placeholderChecked = (existingOv and existingOv.placeholder) or false
+            end
+            local placeholderCheckbox = UI.CreateModernCheckbox(
                 rc,
                 L["Show Placeholder"],
                 placeholderChecked,
                 function(checked)
-                    if placeholderOpts.forced then
-                        placeholderCheckbox:SetChecked(true)
-                        return
-                    end
                     local ov = ensureOv()
                     if not ov then return end
-                    ov.placeholder = checked or nil
+                    if promoted then
+                        ov.hidePlaceholder = (not checked) or nil
+                    else
+                        ov.placeholder = checked or nil
+                    end
                     save()
                 end
             )
             placeholderCheckbox:SetPoint("TOPLEFT", 0, yOff)
-            if placeholderOpts.forced or not placeholderOpts.isStatic then
+            if not placeholderOpts.isStatic then
                 placeholderCheckbox.checkbox:Disable()
             end
             yOff = yOff - 36
@@ -1850,6 +1872,8 @@ local function CreateBuffGroupsPanel(page)
             if tex then frame.icon:SetTexture(tex) end
             frame.icon:SetDesaturated(false)
             frame.icon:SetAlpha(1)
+            local isPromoted = not item.isCustom and IsImportedIntoCooldowns(spellID)
+            ApplyImportedTint(frame.icon, isPromoted)
 
             if frame.border then
                 ApplyConfiguredBorderColor(frame.border)
@@ -1872,6 +1896,9 @@ local function CreateBuffGroupsPanel(page)
                     end
                 else
                     GameTooltip:SetSpellByID(displayID)
+                end
+                if isPromoted then
+                    GameTooltip:AddLine(L["Imported into cooldowns"], 1, 0.35, 0.35)
                 end
                 GameTooltip:Show()
             end)
@@ -1966,6 +1993,7 @@ local function CreateBuffGroupsPanel(page)
                 iconContainer.border:SetAlpha(1)
             end
         end
+        ApplyImportedTint(iconTex, not GetCustomBuffEntry(spellID) and IsImportedIntoCooldowns(spellID))
 
         local removeBtn = widget.removeBtn
         removeBtn:Hide()

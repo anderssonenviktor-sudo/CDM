@@ -1171,6 +1171,14 @@ local function IsPromotedBuffActive(frame)
     return frame:IsShown() and frame.Cooldown and frame.Cooldown:IsVisible() or false
 end
 
+local function IsPromotedPreviewActive()
+    if CDM.anchorModeActive or CDM.isEditModeActive then return true end
+    local settings = _G.CooldownViewerSettings
+    if settings and settings:IsShown() then return true end
+    local editMode = _G.EditModeManagerFrame
+    return editMode and editMode:IsShown() or false
+end
+
 local function SyncPromotedBuffPlaceholder(frame)
     local placeholder = promotedBuffPlaceholders[frame]
     if not placeholder then return end
@@ -1195,7 +1203,18 @@ local function SyncPromotedBuffPlaceholder(frame)
     local visualsHidden = frameData.cdmVisualsHidden
     placeholder.Icon:SetDesaturation(active and 0 or 1)
     local actualVisible = frame.IsVisible and frame:IsVisible()
-    placeholder:SetAlpha((not visualsHidden and (not active or not actualVisible)) and 1 or 0)
+    -- With the placeholder turned off the slot stays reserved but empty, like
+    -- a static buff group: the layout still counts the hidden Blizzard frame.
+    -- Previews (Blizzard CDM settings, Edit Mode, anchor mode) still show it so
+    -- the icon can be found and positioned.
+    local showPlaceholder = not (override and override.hidePlaceholder) or IsPromotedPreviewActive()
+    placeholder:SetAlpha((showPlaceholder and not visualsHidden and (not active or not actualVisible)) and 1 or 0)
+    -- The inactive Blizzard frame can stay shown (the ungrouped row shows it),
+    -- so its border would outline the empty slot once nothing covers it.
+    local borderFrame = frameData.borderFrame
+    if borderFrame then
+        borderFrame:SetAlpha((active or showPlaceholder) and 1 or 0)
+    end
     if frame.Icon then
         if active then
             frame.Icon:SetDesaturation(0)
@@ -1274,6 +1293,7 @@ function CDM:ReleasePromotedBuffPlaceholder(frame)
     placeholder:Hide()
     if not InCombatLockdown() then placeholder:ClearAllPoints() end
     promotedBuffPlaceholders[frame] = nil
+    if frameData.borderFrame then frameData.borderFrame:SetAlpha(1) end
     if frame.Icon and not frameData.cdmVisualsHidden then
         frame.Icon:SetAlpha(1)
     end
