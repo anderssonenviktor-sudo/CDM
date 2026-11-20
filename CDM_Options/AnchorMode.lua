@@ -16,6 +16,8 @@ local IsShiftKeyDown = IsShiftKeyDown
 local math_abs = math.abs
 local math_ceil = math.ceil
 local math_floor = math.floor
+local math_cos = math.cos
+local math_pi = math.pi
 local math_rad = math.rad
 local pairs = pairs
 local ipairs = ipairs
@@ -64,6 +66,16 @@ local GRID_CENTER_ALPHA = 0.55
 local SNAP_RANGE = 10
 local OVERLAY_COLOR = { 0.08, 0.08, 0.08, 0.72 }
 local GOLD = { 1, 0.82, 0, 1 }
+local SELECTED_COLOR = { 0, 0.686, 1, 1 } -- #00AFFF
+-- Corner brackets on the selected module, in pixels so every module matches.
+local BRACKET_LENGTH = 10
+local BRACKET_THICKNESS = 2
+local BRACKET_CORNERS = { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }
+-- Brackets breathe outward by BRACKET_PULSE_SPREAD pixels and fade to
+-- BRACKET_PULSE_MIN_ALPHA once per BRACKET_PULSE_PERIOD seconds.
+local BRACKET_PULSE_PERIOD = 1.2
+local BRACKET_PULSE_SPREAD = 1.5
+local BRACKET_PULSE_MIN_ALPHA = 0.65
 local gridCenterX, gridCenterY = 0, 0
 local ARROW_TEXTURE = "Interface\\AddOns\\CDM\\Media\\Textures\\collapse"
 
@@ -811,14 +823,77 @@ local function CreateAnchorBanner()
     return banner
 end
 
-local function RefreshOverlaySelection()
-    for _, overlay in ipairs(AnchorMode.overlays) do
-        local selected = AnchorMode.selectedEntry == overlay.entry
-        if selected or overlay.isHovered then
+local function SetBracketSpread(brackets, spread)
+    local overlay = brackets:GetParent()
+    brackets:ClearAllPoints()
+    PixelUtil.SetPoint(brackets, "TOPLEFT", overlay, "TOPLEFT", -spread, spread)
+    PixelUtil.SetPoint(brackets, "BOTTOMRIGHT", overlay, "BOTTOMRIGHT", spread, -spread)
+end
+
+local function AnimateBrackets(self, elapsed)
+    self.elapsed = (self.elapsed + elapsed) % BRACKET_PULSE_PERIOD
+    -- 0 at rest, 1 at the widest point of the pulse.
+    local phase = (1 - math_cos(self.elapsed / BRACKET_PULSE_PERIOD * 2 * math_pi)) * 0.5
+    local spread = math_floor(phase * BRACKET_PULSE_SPREAD + 0.5)
+    if spread ~= self.spread then
+        self.spread = spread
+        SetBracketSpread(self, spread)
+    end
+    self:SetAlpha(1 - phase * (1 - BRACKET_PULSE_MIN_ALPHA))
+end
+
+local function CreateBrackets(overlay)
+    local brackets = CreateFrame("Frame", nil, overlay)
+    brackets:SetFrameLevel(overlay:GetFrameLevel() + 1)
+    for _, point in ipairs(BRACKET_CORNERS) do
+        local horizontal = brackets:CreateTexture(nil, "OVERLAY")
+        horizontal:SetColorTexture(SELECTED_COLOR[1], SELECTED_COLOR[2], SELECTED_COLOR[3], SELECTED_COLOR[4])
+        PixelUtil.SetSize(horizontal, BRACKET_LENGTH, BRACKET_THICKNESS, BRACKET_LENGTH, BRACKET_THICKNESS)
+        PixelUtil.SetPoint(horizontal, point, brackets, point, 0, 0)
+        local vertical = brackets:CreateTexture(nil, "OVERLAY")
+        vertical:SetColorTexture(SELECTED_COLOR[1], SELECTED_COLOR[2], SELECTED_COLOR[3], SELECTED_COLOR[4])
+        PixelUtil.SetSize(vertical, BRACKET_THICKNESS, BRACKET_LENGTH, BRACKET_THICKNESS, BRACKET_LENGTH)
+        PixelUtil.SetPoint(vertical, point, brackets, point, 0, 0)
+    end
+    brackets:SetScript("OnUpdate", AnimateBrackets)
+    return brackets
+end
+
+local function SetBracketsShown(overlay, shown)
+    if shown and not overlay.brackets then
+        overlay.brackets = CreateBrackets(overlay)
+    end
+    local brackets = overlay.brackets
+    if not brackets then return end
+    if shown and (brackets.spread == nil or not brackets:IsShown()) then
+        -- Restart the pulse from rest each time a module is selected.
+        brackets.elapsed = 0
+        brackets.spread = 0
+        SetBracketSpread(brackets, 0)
+        brackets:SetAlpha(1)
+    end
+    brackets:SetShown(shown)
+end
+
+local function UpdateOverlayHighlight(overlay)
+    local selected = AnchorMode.selectedEntry == overlay.entry
+    if selected then
+        overlay:SetBackdropBorderColor(0, 0, 0, 1)
+        overlay.label:SetTextColor(SELECTED_COLOR[1], SELECTED_COLOR[2], SELECTED_COLOR[3], 1)
+    else
+        if overlay.isHovered then
             overlay:SetBackdropBorderColor(1, 1, 1, 1)
         else
             overlay:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], GOLD[4])
         end
+        overlay.label:SetTextColor(GOLD[1], GOLD[2], GOLD[3], 1)
+    end
+    SetBracketsShown(overlay, selected)
+end
+
+local function RefreshOverlaySelection()
+    for _, overlay in ipairs(AnchorMode.overlays) do
+        UpdateOverlayHighlight(overlay)
     end
 end
 
@@ -1149,20 +1224,17 @@ local function CreateOverlay(entry)
     label:SetText(entry.label)
     label:SetTextColor(GOLD[1], GOLD[2], GOLD[3], 1)
     label:SetShadowOffset(1, -1)
+    overlay.label = label
 
     overlay:SetScript("OnDragStart", StartDrag)
     overlay:SetScript("OnDragStop", StopDrag)
     overlay:SetScript("OnEnter", function(self)
         self.isHovered = true
-        self:SetBackdropBorderColor(1, 1, 1, 1)
+        UpdateOverlayHighlight(self)
     end)
     overlay:SetScript("OnLeave", function(self)
         self.isHovered = false
-        if AnchorMode.selectedEntry == self.entry then
-            self:SetBackdropBorderColor(1, 1, 1, 1)
-        else
-            self:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], GOLD[4])
-        end
+        UpdateOverlayHighlight(self)
     end)
     overlay:SetScript("OnMouseDown", function(self, button)
         if button == "LeftButton" then SelectEntry(self.entry) end
