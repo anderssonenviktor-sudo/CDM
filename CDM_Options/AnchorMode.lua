@@ -16,8 +16,6 @@ local IsShiftKeyDown = IsShiftKeyDown
 local math_abs = math.abs
 local math_ceil = math.ceil
 local math_floor = math.floor
-local math_cos = math.cos
-local math_pi = math.pi
 local math_rad = math.rad
 local pairs = pairs
 local ipairs = ipairs
@@ -67,15 +65,12 @@ local SNAP_RANGE = 10
 local OVERLAY_COLOR = { 0.08, 0.08, 0.08, 0.72 }
 local GOLD = { 1, 0.82, 0, 1 }
 local SELECTED_COLOR = { 0, 0.686, 1, 1 } -- #00AFFF
--- Corner brackets on the selected module, in pixels so every module matches.
-local BRACKET_LENGTH = 10
-local BRACKET_THICKNESS = 2
-local BRACKET_CORNERS = { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }
--- Brackets breathe outward by BRACKET_PULSE_SPREAD pixels and fade to
--- BRACKET_PULSE_MIN_ALPHA once per BRACKET_PULSE_PERIOD seconds.
-local BRACKET_PULSE_PERIOD = 1.2
-local BRACKET_PULSE_SPREAD = 1.5
-local BRACKET_PULSE_MIN_ALPHA = 0.65
+-- Pixel glow on the selected module. All values are screen pixels so every
+-- module looks the same: bigger modules get more lines, not longer or faster ones.
+local GLOW_LINE_LENGTH = 30
+local GLOW_LINE_THICKNESS = 1
+local GLOW_LINE_SPACING = 50 -- distance between line starts
+local GLOW_SPEED = 60 -- pixels per second, clockwise
 local gridCenterX, gridCenterY = 0, 0
 local ARROW_TEXTURE = "Interface\\AddOns\\CDM\\Media\\Textures\\collapse"
 
@@ -823,56 +818,84 @@ local function CreateAnchorBanner()
     return banner
 end
 
-local function SetBracketSpread(brackets, spread)
-    local overlay = brackets:GetParent()
-    brackets:ClearAllPoints()
-    PixelUtil.SetPoint(brackets, "TOPLEFT", overlay, "TOPLEFT", -spread, spread)
-    PixelUtil.SetPoint(brackets, "BOTTOMRIGHT", overlay, "BOTTOMRIGHT", spread, -spread)
+-- Places one piece of a glow line on an edge. Edges run clockwise from the
+-- top-left corner; u0/u1 are pixel distances along that edge.
+local function PlaceGlowPiece(glow, count, edge, u0, u1, px)
+    local line = glow.lines[count]
+    if not line then
+        line = glow:CreateTexture(nil, "OVERLAY")
+        line:SetColorTexture(SELECTED_COLOR[1], SELECTED_COLOR[2], SELECTED_COLOR[3], SELECTED_COLOR[4])
+        glow.lines[count] = line
+    end
+    local length, thickness = (u1 - u0) * px, GLOW_LINE_THICKNESS * px
+    line:ClearAllPoints()
+    if edge == 1 then
+        line:SetPoint("TOPLEFT", glow, "TOPLEFT", u0 * px, 0)
+        line:SetSize(length, thickness)
+    elseif edge == 2 then
+        line:SetPoint("TOPRIGHT", glow, "TOPRIGHT", 0, -u0 * px)
+        line:SetSize(thickness, length)
+    elseif edge == 3 then
+        line:SetPoint("BOTTOMRIGHT", glow, "BOTTOMRIGHT", -u0 * px, 0)
+        line:SetSize(length, thickness)
+    else
+        line:SetPoint("BOTTOMLEFT", glow, "BOTTOMLEFT", 0, u0 * px)
+        line:SetSize(thickness, length)
+    end
+    line:Show()
 end
 
-local function AnimateBrackets(self, elapsed)
-    self.elapsed = (self.elapsed + elapsed) % BRACKET_PULSE_PERIOD
-    -- 0 at rest, 1 at the widest point of the pulse.
-    local phase = (1 - math_cos(self.elapsed / BRACKET_PULSE_PERIOD * 2 * math_pi)) * 0.5
-    local spread = math_floor(phase * BRACKET_PULSE_SPREAD + 0.5)
-    if spread ~= self.spread then
-        self.spread = spread
-        SetBracketSpread(self, spread)
+local function AnimateGlow(glow, elapsed)
+    local px = PixelUtil.GetPixelToUIUnitFactor() / glow:GetEffectiveScale()
+    local width, height = glow:GetSize()
+    width, height = math_floor(width / px + 0.5), math_floor(height / px + 0.5)
+    local perimeter = 2 * (width + height)
+    if width <= 0 or height <= 0 then return end
+
+    glow.elapsed = (glow.elapsed + elapsed) % (perimeter / GLOW_SPEED)
+    local edgeLengths = glow.edgeLengths
+    edgeLengths[1], edgeLengths[2], edgeLengths[3], edgeLengths[4] = width, height, width, height
+
+    local lineCount = math.max(1, math_floor(perimeter / GLOW_LINE_SPACING + 0.5))
+    local spacing = perimeter / lineCount
+    local lineLength = math.min(GLOW_LINE_LENGTH, math_floor(spacing))
+    local travel = glow.elapsed * GLOW_SPEED
+    local count = 0
+    for i = 0, lineCount - 1 do
+        local pos = math_floor(travel + i * spacing) % perimeter
+        local remaining = lineLength
+        -- Find the edge holding the line's head, then wrap the rest around corners.
+        local edge, u = 1, pos
+        while u >= edgeLengths[edge] do
+            u = u - edgeLengths[edge]
+            edge = edge + 1
+        end
+        while remaining > 0 do
+            local take = math.min(edgeLengths[edge] - u, remaining)
+            count = count + 1
+            PlaceGlowPiece(glow, count, edge, u, u + take, px)
+            remaining = remaining - take
+            edge, u = edge % 4 + 1, 0
+        end
     end
-    self:SetAlpha(1 - phase * (1 - BRACKET_PULSE_MIN_ALPHA))
+    for i = count + 1, #glow.lines do
+        glow.lines[i]:Hide()
+    end
 end
 
-local function CreateBrackets(overlay)
-    local brackets = CreateFrame("Frame", nil, overlay)
-    brackets:SetFrameLevel(overlay:GetFrameLevel() + 1)
-    for _, point in ipairs(BRACKET_CORNERS) do
-        local horizontal = brackets:CreateTexture(nil, "OVERLAY")
-        horizontal:SetColorTexture(SELECTED_COLOR[1], SELECTED_COLOR[2], SELECTED_COLOR[3], SELECTED_COLOR[4])
-        PixelUtil.SetSize(horizontal, BRACKET_LENGTH, BRACKET_THICKNESS, BRACKET_LENGTH, BRACKET_THICKNESS)
-        PixelUtil.SetPoint(horizontal, point, brackets, point, 0, 0)
-        local vertical = brackets:CreateTexture(nil, "OVERLAY")
-        vertical:SetColorTexture(SELECTED_COLOR[1], SELECTED_COLOR[2], SELECTED_COLOR[3], SELECTED_COLOR[4])
-        PixelUtil.SetSize(vertical, BRACKET_THICKNESS, BRACKET_LENGTH, BRACKET_THICKNESS, BRACKET_LENGTH)
-        PixelUtil.SetPoint(vertical, point, brackets, point, 0, 0)
+local function SetGlowShown(overlay, shown)
+    local glow = overlay.glow
+    if shown and not glow then
+        glow = CreateFrame("Frame", nil, overlay)
+        glow:SetAllPoints(overlay)
+        glow:SetFrameLevel(overlay:GetFrameLevel() + 1)
+        glow.lines = {}
+        glow.edgeLengths = {}
+        glow.elapsed = 0
+        glow:SetScript("OnUpdate", AnimateGlow)
+        overlay.glow = glow
     end
-    brackets:SetScript("OnUpdate", AnimateBrackets)
-    return brackets
-end
-
-local function SetBracketsShown(overlay, shown)
-    if shown and not overlay.brackets then
-        overlay.brackets = CreateBrackets(overlay)
-    end
-    local brackets = overlay.brackets
-    if not brackets then return end
-    if shown and (brackets.spread == nil or not brackets:IsShown()) then
-        -- Restart the pulse from rest each time a module is selected.
-        brackets.elapsed = 0
-        brackets.spread = 0
-        SetBracketSpread(brackets, 0)
-        brackets:SetAlpha(1)
-    end
-    brackets:SetShown(shown)
+    if glow then glow:SetShown(shown) end
 end
 
 local function UpdateOverlayHighlight(overlay)
@@ -888,7 +911,7 @@ local function UpdateOverlayHighlight(overlay)
         end
         overlay.label:SetTextColor(GOLD[1], GOLD[2], GOLD[3], 1)
     end
-    SetBracketsShown(overlay, selected)
+    SetGlowShown(overlay, selected)
 end
 
 local function RefreshOverlaySelection()

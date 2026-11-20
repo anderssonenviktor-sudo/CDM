@@ -1,5 +1,5 @@
 ## Changelog
-## v.1.19
+## v.1.20
 
 - First version derived from the old Ayije version
 - Loads of ux work

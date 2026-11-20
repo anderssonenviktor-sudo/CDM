@@ -3,9 +3,10 @@
 ## IconTexture: Interface/AddOns/CDM/Media/Textures/lighticon
 ## Notes: Cooldown Manager Options 
 ## Author: Citrongroda
-## Version: 1.19
+## Version: 1.20
 ## LoadOnDemand: 1
 ## Dependencies: CDM
+## X-Curse-Project-ID: 1785208
 
 Init.lua
 embeds.xml
