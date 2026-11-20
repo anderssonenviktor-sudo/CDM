@@ -294,7 +294,7 @@ CDM.defaults = {
     castBarHighlightLastTick = false,
     castBarTickWidth = 2,
     castBarTickColor = { r = 1, g = 1, b = 1, a = 1 },
-    castBarLastTickColor = { r = 1, g = 0.82, b = 0, a = 0.95 },
+    castBarLastTickColor = { r = 1, g = 0, b = 0, a = 0.95 },
     castBarMassDisintegrateWarning = false,
     castBarClipWarningText = "DON'T CLIP",
     castBarClipWarningFontSize = 18,

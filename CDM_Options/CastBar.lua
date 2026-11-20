@@ -238,23 +238,33 @@ local function CreateCastBarTab(page, tabId)
     )
     page.controls.castBarShowTicks:SetPoint("TOPLEFT", page.controls.castBarIconGapSlider, "BOTTOMLEFT", 0, -10)
 
-    page.controls.castBarHighlightLastTick = UI.CreateModernCheckbox(
-        iconContent,
-        L["Highlight Last Tick"],
-        CDM.db.castBarHighlightLastTick == true,
-        function(checked)
-            CDM.db.castBarHighlightLastTick = checked
-            API:Refresh("STYLE")
-        end
-    )
-    page.controls.castBarHighlightLastTick:SetPoint("TOPLEFT", page.controls.castBarShowTicks, "BOTTOMLEFT", 0, -10)
-
     -- Each color sits on its toggle's row, in one column.
     page.controls.castBarTickColor = UI.CreateColorSwatch(iconContent, "", "castBarTickColor", "STYLE")
     page.controls.castBarTickColor:SetPoint("LEFT", page.controls.castBarShowTicks, "LEFT", 190, 0)
 
-    page.controls.castBarLastTickColor = UI.CreateColorSwatch(iconContent, "", "castBarLastTickColor", "STYLE")
-    page.controls.castBarLastTickColor:SetPoint("LEFT", page.controls.castBarHighlightLastTick, "LEFT", 190, 0)
+    -- Last-tick highlight is Arcane only (Arcane Missiles clip point).
+    local ARCANE_SPEC_ID = 62
+    local lastTickRow = page.controls.castBarShowTicks
+    if CDM.GetCurrentSpecID and CDM:GetCurrentSpecID() == ARCANE_SPEC_ID then
+        page.controls.castBarHighlightLastTick = UI.CreateModernCheckbox(
+            iconContent,
+            L["Highlight Last Tick"],
+            CDM.db.castBarHighlightLastTick == true,
+            function(checked)
+                CDM.db.castBarHighlightLastTick = checked
+                API:Refresh("STYLE")
+            end
+        )
+        page.controls.castBarHighlightLastTick:SetPoint("TOPLEFT", lastTickRow, "BOTTOMLEFT", 0, -10)
+
+        page.controls.castBarLastTickColor = UI.CreateColorSwatch(iconContent, "", "castBarLastTickColor", "STYLE")
+        page.controls.castBarLastTickColor:SetPoint("LEFT", page.controls.castBarHighlightLastTick, "LEFT", 190, 0)
+
+        lastTickRow = page.controls.castBarHighlightLastTick
+    else
+        ICON_SECTION_HEIGHT = ICON_SECTION_HEIGHT - 36
+        iconSection:SetContentHeight(ICON_SECTION_HEIGHT)
+    end
 
     page.controls.castBarTickWidthSlider = UI.CreateModernSlider(
         iconContent,
@@ -298,7 +308,7 @@ local function CreateCastBarTab(page, tabId)
             end
         )
         page.controls.castBarMassDisintegrateWarning:SetPoint(
-            "TOPLEFT", page.controls.castBarHighlightLastTick, "BOTTOMLEFT", 0, -10)
+            "TOPLEFT", lastTickRow, "BOTTOMLEFT", 0, -10)
         massSettings:SetPoint("TOPLEFT", page.controls.castBarMassDisintegrateWarning, "BOTTOMLEFT", 20, -10)
 
         local textLabel = massSettings:CreateFontString(nil, "ARTWORK", "CDM_Font14")
@@ -366,7 +376,7 @@ local function CreateCastBarTab(page, tabId)
         UpdateMassLayout()
     else
         page.controls.castBarTickWidthSlider:SetPoint(
-            "TOPLEFT", page.controls.castBarHighlightLastTick, "BOTTOMLEFT", 0, -20)
+            "TOPLEFT", lastTickRow, "BOTTOMLEFT", 0, -20)
     end
 
     local textureSection, textureContent = CollapsibleSection("texture", L["Bar Texture"], 75)

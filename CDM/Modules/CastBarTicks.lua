@@ -49,7 +49,8 @@ local MAX_MARKS = 20
 local SAME_CAST_WINDOW = 0.5
 local PREVIEW_FRACTIONS = { 0.2, 0.4, 0.6, 0.8 }
 local DEFAULT_TICK_COLOR = { r = 1, g = 1, b = 1, a = 1 }
-local DEFAULT_LAST_TICK_COLOR = { r = 1, g = 0.82, b = 0, a = 0.95 }
+local DEFAULT_LAST_TICK_COLOR = { r = 1, g = 0, b = 0, a = 0.95 }
+local ARCANE_SPEC_ID = 62
 
 local function CfgVal(key, default)
     return CDM_C.GetConfigValue(key, default)
@@ -191,7 +192,9 @@ local function Layout(frame)
     if not state then return end
     local count = state.count
     local showTicks = CfgVal("castBarShowTicks", true) == true
+    -- Arcane only; a saved value from that spec stays off on other specs.
     local highlightLast = CfgVal("castBarHighlightLastTick", false) == true
+        and CDM:GetCurrentSpecID() == ARCANE_SPEC_ID
     local bar = frame.castBar
     local width, height = bar:GetWidth(), bar:GetHeight()
     if count == 0 or not (showTicks or highlightLast) or not width or width <= 0 or not height or height <= 0 then
